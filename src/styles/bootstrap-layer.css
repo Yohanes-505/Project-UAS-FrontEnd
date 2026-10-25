@@ -1,0 +1,8 @@
+/*
+ * Bootstrap untuk landing page & halaman login, dimasukkan ke cascade layer.
+ * CSS di luar layer (landing.css, security.css, bootstrap-compat.css) selalu
+ * menang dari isi layer ini, berapa pun specificity selector Bootstrap-nya.
+ * Admin tidak memakai file ini: admin memuat Bootstrap biasa seperti versi HTML.
+ */
+@layer bootstrap;
+@import "bootstrap/dist/css/bootstrap.min.css" layer(bootstrap);

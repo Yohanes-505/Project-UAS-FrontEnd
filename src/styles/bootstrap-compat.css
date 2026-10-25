@@ -1,0 +1,245 @@
+/*
+ * Lapisan kompatibilitas Bootstrap untuk landing page & halaman login.
+ *
+ * Bootstrap dimuat di cascade layer "bootstrap" (lihat bootstrap-layer.css),
+ * lalu aturan di file ini mengembalikan (revert) gaya bawaan Bootstrap ke
+ * default browser untuk:
+ *   - elemen polos (h1, p, a, button, input, ...) = "Reboot" Bootstrap
+ *   - class landing yang kebetulan sama namanya dengan Bootstrap
+ *     (.btn, .navbar, .card, .modal, .show, .active, ...)
+ * Hasilnya tampilan landing & login sama persis seperti versi HTML,
+ * tapi class Bootstrap lain (d-flex, row, col-md-6, mt-3, ...) tetap bisa dipakai.
+ *
+ * File ini dibuat otomatis dari bootstrap@5.3.3. Jangan diedit manual.
+ * Specificity semua selector 0 (pakai :where), jadi CSS landing/login selalu menang.
+ */
+:where([data-bs-theme=dark]){color-scheme:revert}
+:where(*),:where(*)::before,:where(*)::after{box-sizing:revert}
+@media (prefers-reduced-motion: no-preference){
+  :where(:root){scroll-behavior:revert}
+}
+:where(body){margin:revert;font-family:revert;font-size:revert;font-weight:revert;line-height:revert;color:revert;text-align:revert;background-color:revert;-webkit-text-size-adjust:revert;-webkit-tap-highlight-color:revert}
+:where(hr){margin:revert;color:revert;border:revert;border-top:revert;opacity:revert}
+:where(h6),:where(h5),:where(h4),:where(h3),:where(h2),:where(h1){margin-top:revert;margin-bottom:revert;font-weight:revert;line-height:revert;color:revert}
+:where(h1){font-size:revert}
+@media (min-width: 1200px){
+  :where(h1){font-size:revert}
+}
+:where(h2){font-size:revert}
+@media (min-width: 1200px){
+  :where(h2){font-size:revert}
+}
+:where(h3){font-size:revert}
+@media (min-width: 1200px){
+  :where(h3){font-size:revert}
+}
+:where(h4){font-size:revert}
+@media (min-width: 1200px){
+  :where(h4){font-size:revert}
+}
+:where(h5){font-size:revert}
+:where(h6){font-size:revert}
+:where(p){margin-top:revert;margin-bottom:revert}
+:where(abbr[title]){-webkit-text-decoration:revert;text-decoration:revert;cursor:revert;-webkit-text-decoration-skip-ink:revert;text-decoration-skip-ink:revert}
+:where(address){margin-bottom:revert;font-style:revert;line-height:revert}
+:where(ol),:where(ul){padding-left:revert}
+:where(ol),:where(ul),:where(dl){margin-top:revert;margin-bottom:revert}
+:where(ol ol),:where(ul ul),:where(ol ul),:where(ul ol){margin-bottom:revert}
+:where(dt){font-weight:revert}
+:where(dd){margin-bottom:revert;margin-left:revert}
+:where(blockquote){margin:revert}
+:where(b),:where(strong){font-weight:revert}
+:where(small),:where(.small){font-size:revert}
+:where(mark){padding:revert;color:revert;background-color:revert}
+:where(sub),:where(sup){position:revert;font-size:revert;line-height:revert;vertical-align:revert}
+:where(sub){bottom:revert}
+:where(sup){top:revert}
+:where(a){color:revert;text-decoration:revert}
+:where(a:not([href]):not([class])),:where(a:not([href]):not([class]):hover){color:revert;text-decoration:revert}
+:where(pre),:where(code),:where(kbd),:where(samp){font-family:revert;font-size:revert}
+:where(pre){display:revert;margin-top:revert;margin-bottom:revert;overflow:revert;font-size:revert}
+:where(pre code){font-size:revert;color:revert;word-break:revert}
+:where(code){font-size:revert;color:revert;word-wrap:revert}
+:where(a > code){color:revert}
+:where(kbd){padding:revert;font-size:revert;color:revert;background-color:revert;border-radius:revert}
+:where(kbd kbd){padding:revert;font-size:revert}
+:where(figure){margin:revert}
+:where(img),:where(svg){vertical-align:revert}
+:where(table){caption-side:revert;border-collapse:revert}
+:where(caption){padding-top:revert;padding-bottom:revert;color:revert;text-align:revert}
+:where(th){text-align:revert}
+:where(thead),:where(tbody),:where(tfoot),:where(tr),:where(td),:where(th){border-color:revert;border-style:revert;border-width:revert}
+:where(label){display:revert}
+:where(button){border-radius:revert}
+:where(button:focus:not(:focus-visible)){outline:revert}
+:where(input),:where(button),:where(select),:where(optgroup),:where(textarea){margin:revert;font-family:revert;font-size:revert;line-height:revert}
+:where(button),:where(select){text-transform:revert}
+:where([role=button]){cursor:revert}
+:where(select){word-wrap:revert}
+:where(select:disabled){opacity:revert}
+:where(button),:where([type=button]),:where([type=reset]),:where([type=submit]){-webkit-appearance:revert}
+:where(button:not(:disabled)),:where([type=button]:not(:disabled)),:where([type=reset]:not(:disabled)),:where([type=submit]:not(:disabled)){cursor:revert}
+*::-moz-focus-inner{padding:revert;border-style:revert}
+:where(textarea){resize:revert}
+:where(fieldset){min-width:revert;padding:revert;margin:revert;border:revert}
+:where(legend){float:revert;width:revert;padding:revert;margin-bottom:revert;font-size:revert;line-height:revert}
+@media (min-width: 1200px){
+  :where(legend){font-size:revert}
+}
+:where(legend + *){clear:revert}
+*::-webkit-datetime-edit-fields-wrapper,*::-webkit-datetime-edit-text,*::-webkit-datetime-edit-minute,*::-webkit-datetime-edit-hour-field,*::-webkit-datetime-edit-day-field,*::-webkit-datetime-edit-month-field,*::-webkit-datetime-edit-year-field{padding:revert}
+*::-webkit-inner-spin-button{height:revert}
+:where([type=search]){-webkit-appearance:revert;outline-offset:revert}
+*::-webkit-search-decoration{-webkit-appearance:revert}
+*::-webkit-color-swatch-wrapper{padding:revert}
+*::-webkit-file-upload-button{font:revert;-webkit-appearance:revert}
+*::file-selector-button{font:revert;-webkit-appearance:revert}
+:where(output){display:revert}
+:where(iframe){border:revert}
+:where(summary){display:revert;cursor:revert}
+:where(progress){vertical-align:revert}
+:where(.row){display:revert;flex-wrap:revert;margin-top:revert;margin-right:revert;margin-left:revert}
+:where(.row > *){flex-shrink:revert;width:revert;max-width:revert;padding-right:revert;padding-left:revert;margin-top:revert}
+:where(.col){flex:revert}
+:where(.table){width:revert;margin-bottom:revert;vertical-align:revert;border-color:revert}
+:where(.table > :not(caption) > * > *){padding:revert;color:revert;background-color:revert;border-bottom-width:revert;box-shadow:revert}
+:where(.table > tbody){vertical-align:revert}
+:where(.table > thead){vertical-align:revert}
+:where(.btn-check[disabled] + .btn),:where(.btn-check:disabled + .btn){pointer-events:revert;filter:revert;opacity:revert}
+:where(.input-group .btn){position:revert;z-index:revert}
+:where(.input-group .btn:focus){z-index:revert}
+:where(.input-group-lg > .btn){padding:revert;font-size:revert;border-radius:revert}
+:where(.input-group-sm > .btn){padding:revert;font-size:revert;border-radius:revert}
+:where(.btn){display:revert;padding:revert;font-family:revert;font-size:revert;font-weight:revert;line-height:revert;color:revert;text-align:revert;text-decoration:revert;vertical-align:revert;cursor:revert;-webkit-user-select:revert;-moz-user-select:revert;user-select:revert;border:revert;border-radius:revert;background-color:revert;transition:revert}
+@media (prefers-reduced-motion: reduce){
+  :where(.btn){transition:revert}
+}
+:where(.btn:hover){color:revert;background-color:revert;border-color:revert}
+:where(.btn-check + .btn:hover){color:revert;background-color:revert;border-color:revert}
+:where(.btn:focus-visible){color:revert;background-color:revert;border-color:revert;outline:revert;box-shadow:revert}
+:where(.btn-check:focus-visible + .btn){border-color:revert;outline:revert;box-shadow:revert}
+:where(.btn-check:checked + .btn),:where(:not(.btn-check) + .btn:active),:where(.btn:first-child:active),:where(.btn.active),:where(.btn.show){color:revert;background-color:revert;border-color:revert}
+:where(.btn-check:checked + .btn:focus-visible),:where(:not(.btn-check) + .btn:active:focus-visible),:where(.btn:first-child:active:focus-visible),:where(.btn.active:focus-visible),:where(.btn.show:focus-visible){box-shadow:revert}
+:where(.btn-check:checked:focus-visible + .btn){box-shadow:revert}
+:where(.btn:disabled),:where(.btn.disabled),:where(fieldset:disabled .btn){color:revert;pointer-events:revert;background-color:revert;border-color:revert;opacity:revert}
+:where(.fade:not(.show)){opacity:revert}
+:where(.collapse:not(.show)){display:revert}
+:where(.dropdown-item.active){color:revert;text-decoration:revert;background-color:revert}
+:where(.dropdown-menu.show){display:revert}
+:where(.btn-group > .btn),:where(.btn-group-vertical > .btn){position:revert;flex:revert}
+:where(.btn-group > .btn-check:checked + .btn),:where(.btn-group > .btn-check:focus + .btn),:where(.btn-group > .btn:hover),:where(.btn-group > .btn:focus),:where(.btn-group > .btn:active),:where(.btn-group > .btn.active),:where(.btn-group-vertical > .btn-check:checked + .btn),:where(.btn-group-vertical > .btn-check:focus + .btn),:where(.btn-group-vertical > .btn:hover),:where(.btn-group-vertical > .btn:focus),:where(.btn-group-vertical > .btn:active),:where(.btn-group-vertical > .btn.active){z-index:revert}
+:where(.btn-group > :not(.btn-check:first-child) + .btn){margin-left:revert}
+:where(.btn-group > .btn:not(:last-child):not(.dropdown-toggle)),:where(.btn-group > .btn.dropdown-toggle-split:first-child),:where(.btn-group > .btn-group:not(:last-child) > .btn){border-top-right-radius:revert;border-bottom-right-radius:revert}
+:where(.btn-group > .btn:nth-child(n/**/+3)),:where(.btn-group > :not(.btn-check) + .btn),:where(.btn-group > .btn-group:not(:first-child) > .btn){border-top-left-radius:revert;border-bottom-left-radius:revert}
+:where(.btn-group-sm > .btn + .dropdown-toggle-split){padding-right:revert;padding-left:revert}
+:where(.btn-group-lg > .btn + .dropdown-toggle-split){padding-right:revert;padding-left:revert}
+:where(.btn-group-vertical > .btn){width:revert}
+:where(.btn-group-vertical > .btn:not(:first-child)){margin-top:revert}
+:where(.btn-group-vertical > .btn:not(:last-child):not(.dropdown-toggle)),:where(.btn-group-vertical > .btn-group:not(:last-child) > .btn){border-bottom-right-radius:revert;border-bottom-left-radius:revert}
+:where(.btn-group-vertical > .btn ~ .btn),:where(.btn-group-vertical > .btn-group:not(:first-child) > .btn){border-top-left-radius:revert;border-top-right-radius:revert}
+:where(.nav){display:revert;flex-wrap:revert;padding-left:revert;margin-bottom:revert;list-style:revert}
+:where(.nav-tabs .nav-link.active),:where(.nav-tabs .nav-item.show .nav-link){color:revert;background-color:revert;border-color:revert}
+:where(.nav-pills .nav-link.active),:where(.nav-pills .show > .nav-link){color:revert;background-color:revert}
+:where(.nav-underline .nav-link.active),:where(.nav-underline .show > .nav-link){font-weight:revert;color:revert;border-bottom-color:revert}
+:where(.tab-content > .active){display:revert}
+:where(.navbar){position:revert;display:revert;flex-wrap:revert;align-items:revert;justify-content:revert;padding:revert}
+:where(.navbar > .container),:where(.navbar > .container-fluid),:where(.navbar > .container-sm),:where(.navbar > .container-md),:where(.navbar > .container-lg),:where(.navbar > .container-xl),:where(.navbar > .container-xxl){display:revert;flex-wrap:revert;align-items:revert;justify-content:revert}
+:where(.navbar-nav .nav-link.active),:where(.navbar-nav .nav-link.show){color:revert}
+:where(.card){position:revert;display:revert;flex-direction:revert;min-width:revert;height:revert;color:revert;word-wrap:revert;background-color:revert;background-clip:revert;border:revert;border-radius:revert}
+:where(.card > hr){margin-right:revert;margin-left:revert}
+:where(.card > .list-group){border-top:revert;border-bottom:revert}
+:where(.card > .list-group:first-child){border-top-width:revert;border-top-left-radius:revert;border-top-right-radius:revert}
+:where(.card > .list-group:last-child){border-bottom-width:revert;border-bottom-right-radius:revert;border-bottom-left-radius:revert}
+:where(.card > .card-header + .list-group),:where(.card > .list-group + .card-footer){border-top:revert}
+:where(.card-body){flex:revert;padding:revert;color:revert}
+:where(.card-title){margin-bottom:revert;color:revert}
+:where(.card-header-tabs .nav-link.active){background-color:revert;border-bottom-color:revert}
+:where(.card-group > .card){margin-bottom:revert}
+@media (min-width: 576px){
+  :where(.card-group > .card){flex:revert;margin-bottom:revert}
+  :where(.card-group > .card + .card){margin-left:revert;border-left:revert}
+  :where(.card-group > .card:not(:last-child)){border-top-right-radius:revert;border-bottom-right-radius:revert}
+  :where(.card-group > .card:not(:last-child) .card-img-top),:where(.card-group > .card:not(:last-child) .card-header){border-top-right-radius:revert}
+  :where(.card-group > .card:not(:last-child) .card-img-bottom),:where(.card-group > .card:not(:last-child) .card-footer){border-bottom-right-radius:revert}
+  :where(.card-group > .card:not(:first-child)){border-top-left-radius:revert;border-bottom-left-radius:revert}
+  :where(.card-group > .card:not(:first-child) .card-img-top),:where(.card-group > .card:not(:first-child) .card-header){border-top-left-radius:revert}
+  :where(.card-group > .card:not(:first-child) .card-img-bottom),:where(.card-group > .card:not(:first-child) .card-footer){border-bottom-left-radius:revert}
+}
+:where(.breadcrumb-item.active){color:revert}
+:where(.page-link.active),:where(.active > .page-link){z-index:revert;color:revert;background-color:revert;border-color:revert}
+:where(.badge){display:revert;padding:revert;font-size:revert;font-weight:revert;line-height:revert;color:revert;text-align:revert;white-space:revert;vertical-align:revert;border-radius:revert}
+:where(.badge:empty){display:revert}
+:where(.btn .badge){position:revert;top:revert}
+:where(.alert){position:revert;padding:revert;margin-bottom:revert;color:revert;background-color:revert;border:revert;border-radius:revert}
+:where(.list-group-item.active){z-index:revert;color:revert;background-color:revert;border-color:revert}
+:where(.list-group-item + .list-group-item.active){margin-top:revert;border-top-width:revert}
+:where(.list-group-horizontal > .list-group-item.active){margin-top:revert}
+:where(.list-group-horizontal > .list-group-item + .list-group-item.active){margin-left:revert;border-left-width:revert}
+@media (min-width: 576px){
+  :where(.list-group-horizontal-sm > .list-group-item.active){margin-top:revert}
+  :where(.list-group-horizontal-sm > .list-group-item + .list-group-item.active){margin-left:revert;border-left-width:revert}
+}
+@media (min-width: 768px){
+  :where(.list-group-horizontal-md > .list-group-item.active){margin-top:revert}
+  :where(.list-group-horizontal-md > .list-group-item + .list-group-item.active){margin-left:revert;border-left-width:revert}
+}
+@media (min-width: 992px){
+  :where(.list-group-horizontal-lg > .list-group-item.active){margin-top:revert}
+  :where(.list-group-horizontal-lg > .list-group-item + .list-group-item.active){margin-left:revert;border-left-width:revert}
+}
+@media (min-width: 1200px){
+  :where(.list-group-horizontal-xl > .list-group-item.active){margin-top:revert}
+  :where(.list-group-horizontal-xl > .list-group-item + .list-group-item.active){margin-left:revert;border-left-width:revert}
+}
+@media (min-width: 1400px){
+  :where(.list-group-horizontal-xxl > .list-group-item.active){margin-top:revert}
+  :where(.list-group-horizontal-xxl > .list-group-item + .list-group-item.active){margin-left:revert;border-left-width:revert}
+}
+:where(.toast:not(.show)){display:revert}
+:where(.modal){position:revert;top:revert;left:revert;z-index:revert;display:revert;width:revert;height:revert;overflow-x:revert;overflow-y:revert;outline:revert}
+:where(.modal.fade .modal-dialog){transition:revert;transform:revert}
+@media (prefers-reduced-motion: reduce){
+  :where(.modal.fade .modal-dialog){transition:revert}
+}
+:where(.modal.show .modal-dialog){transform:revert}
+:where(.modal.modal-static .modal-dialog){transform:revert}
+:where(.modal-backdrop.show){opacity:revert}
+:where(.tooltip.show){opacity:revert}
+:where(.carousel-item.active){display:revert}
+:where(.active.carousel-item-end){transform:revert}
+:where(.active.carousel-item-start){transform:revert}
+:where(.carousel-fade .carousel-item.active){z-index:revert;opacity:revert}
+:where(.carousel-fade .active.carousel-item-start),:where(.carousel-fade .active.carousel-item-end){z-index:revert;opacity:revert;transition:revert}
+@media (prefers-reduced-motion: reduce){
+  :where(.carousel-fade .active.carousel-item-start),:where(.carousel-fade .active.carousel-item-end){transition:revert}
+}
+:where(.carousel-indicators .active){opacity:revert}
+@media (max-width: 575.98px){
+  :where(.offcanvas-sm.show:not(.hiding)){transform:revert}
+  :where(.offcanvas-sm.show){visibility:revert}
+}
+@media (max-width: 767.98px){
+  :where(.offcanvas-md.show:not(.hiding)){transform:revert}
+  :where(.offcanvas-md.show){visibility:revert}
+}
+@media (max-width: 991.98px){
+  :where(.offcanvas-lg.show:not(.hiding)){transform:revert}
+  :where(.offcanvas-lg.show){visibility:revert}
+}
+@media (max-width: 1199.98px){
+  :where(.offcanvas-xl.show:not(.hiding)){transform:revert}
+  :where(.offcanvas-xl.show){visibility:revert}
+}
+@media (max-width: 1399.98px){
+  :where(.offcanvas-xxl.show:not(.hiding)){transform:revert}
+  :where(.offcanvas-xxl.show){visibility:revert}
+}
+:where(.offcanvas.show:not(.hiding)){transform:revert}
+:where(.offcanvas.show){visibility:revert}
+:where(.offcanvas-backdrop.show){opacity:revert}
+:where(.placeholder){display:revert;min-height:revert;vertical-align:revert;cursor:revert;background-color:revert;opacity:revert}
+:where(.placeholder.btn)::before{display:revert;content:revert}
+:where(.placeholder-glow .placeholder){animation:revert}
+
+/* Utility Bootstrap yang memakai !important tidak bisa di-revert, jadi warnanya disamakan. */
+.text-light{--bs-light-rgb:255,246,233}
