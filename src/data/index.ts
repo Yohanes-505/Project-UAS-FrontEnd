@@ -8,3 +8,4 @@ export * from "./settings";
 export * from "./notifications";
 export * from "./status-styles";
 export * from "./dropdown-options";
+export * from "./dashboard";

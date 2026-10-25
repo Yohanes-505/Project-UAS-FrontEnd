@@ -8,3 +8,4 @@ export * from "./Toast";
 export * from "./Select";
 export * from "./Dropdown";
 export * from "./FilterDropdown";
+export * from "./LineChart";
