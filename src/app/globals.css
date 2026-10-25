@@ -3766,6 +3766,10 @@ body.app-body {
   width: 1rem;
   height: 1rem;
 }
+:where(body.app-body) .u-size-3 {
+  width: 0.75rem;
+  height: 0.75rem;
+}
 :where(body.app-body) .u-h-2 {
   height: 0.5rem;
 }
