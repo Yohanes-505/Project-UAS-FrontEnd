@@ -1,0 +1,242 @@
+{
+  "menu": [
+    {
+      "id": "MN-001",
+      "name": "Rendang Daging",
+      "category": "Daging",
+      "price": 28000,
+      "stock": 12,
+      "available": true,
+      "website": true,
+      "featured": true,
+      "tone": "rendang",
+      "desc": "Daging sapi dimasak 8 jam dengan santan dan rempah Minang."
+    },
+    {
+      "id": "MN-002",
+      "name": "Ayam Pop",
+      "category": "Ayam",
+      "price": 25000,
+      "stock": 18,
+      "available": true,
+      "website": true,
+      "featured": true,
+      "tone": "ayam",
+      "desc": "Ayam kampung direbus bumbu lalu digoreng sebentar, lembut dan gurih."
+    },
+    {
+      "id": "MN-003",
+      "name": "Dendeng Batokok",
+      "category": "Daging",
+      "price": 30000,
+      "stock": 9,
+      "available": true,
+      "website": true,
+      "featured": true,
+      "tone": "dendeng",
+      "desc": "Daging tipis dipukul, dibakar, lalu disiram sambal lado mudo."
+    },
+    {
+      "id": "MN-004",
+      "name": "Gulai Tunjang",
+      "category": "Gulai",
+      "price": 27000,
+      "stock": 6,
+      "available": true,
+      "website": true,
+      "featured": false,
+      "tone": "gulai",
+      "desc": "Tunjang sapi empuk dengan kuah gulai Minang yang kaya rempah."
+    },
+    {
+      "id": "MN-005",
+      "name": "Gulai Ikan",
+      "category": "Gulai",
+      "price": 29000,
+      "stock": 14,
+      "available": true,
+      "website": true,
+      "featured": false,
+      "tone": "ikan",
+      "desc": "Ikan dengan kuah gulai santan dan rempah segar khas Minang."
+    },
+    {
+      "id": "MN-006",
+      "name": "Telur Balado",
+      "category": "Telur",
+      "price": 15000,
+      "stock": 20,
+      "available": true,
+      "website": true,
+      "featured": false,
+      "tone": "telur",
+      "desc": "Telur dengan balado merah pedas gurih khas rumah makan Minang."
+    },
+    {
+      "id": "MN-007",
+      "name": "Perkedel",
+      "category": "Pendamping",
+      "price": 10000,
+      "stock": 7,
+      "available": true,
+      "website": true,
+      "featured": false,
+      "tone": "perkedel",
+      "desc": "Perkedel kentang lembut dengan bumbu sederhana dan gurih."
+    },
+    {
+      "id": "MN-008",
+      "name": "Ayam Bakar",
+      "category": "Ayam",
+      "price": 32000,
+      "stock": 0,
+      "available": false,
+      "website": true,
+      "featured": false,
+      "tone": "bakar",
+      "desc": "Ayam bakar berbumbu Minang dengan aroma panggang yang kuat."
+    }
+  ],
+  "kategori": [
+    {
+      "id": "KAT-001",
+      "name": "Rendang",
+      "image": "images/menu/rendang.jpg",
+      "desc": "Daging sapi dimasak perlahan dengan santan dan rempah sampai bumbunya kering dan meresap.",
+      "taste": "Gurih, Rempah kuat",
+      "spicy": 1,
+      "menuId": "MN-001",
+      "menuName": "Rendang Daging",
+      "visible": true
+    },
+    {
+      "id": "KAT-002",
+      "name": "Dendeng Balado",
+      "image": "images/menu/dendengbalado.jpg",
+      "desc": "Irisan daging sapi tipis digoreng kering lalu dibalut sambal cabai merah.",
+      "taste": "Pedas, Renyah",
+      "spicy": 2,
+      "menuId": "",
+      "menuName": "",
+      "visible": true
+    },
+    {
+      "id": "KAT-003",
+      "name": "Gulai Tunjang",
+      "image": "images/menu/gulaitunjang.jpg",
+      "desc": "Kikil sapi kenyal dalam kuah gulai kuning kental yang kaya rempah.",
+      "taste": "Gurih, Berkuah",
+      "spicy": 1,
+      "menuId": "MN-004",
+      "menuName": "Gulai Tunjang",
+      "visible": true
+    },
+    {
+      "id": "KAT-004",
+      "name": "Gulai Ikan",
+      "image": "images/menu/gulaiikan.jpg",
+      "desc": "Ikan segar dimasak dalam kuah santan kuning dengan sedikit asam kandis.",
+      "taste": "Gurih, Sedikit asam",
+      "spicy": 1,
+      "menuId": "MN-005",
+      "menuName": "Gulai Ikan",
+      "visible": true
+    },
+    {
+      "id": "KAT-005",
+      "name": "Telur Balado",
+      "image": "images/menu/telurbalado.jpg",
+      "desc": "Telur rebus digoreng sebentar lalu disiram sambal balado merah.",
+      "taste": "Pedas manis",
+      "spicy": 2,
+      "menuId": "MN-006",
+      "menuName": "Telur Balado",
+      "visible": true
+    },
+    {
+      "id": "KAT-006",
+      "name": "Perkedel",
+      "image": "images/menu/perkedel.jpg",
+      "desc": "Kentang tumbuk berbumbu, dicelup telur, lalu digoreng sampai keemasan.",
+      "taste": "Gurih, Lembut",
+      "spicy": 0,
+      "menuId": "MN-007",
+      "menuName": "Perkedel",
+      "visible": true
+    },
+    {
+      "id": "KAT-007",
+      "name": "Ayam Bakar",
+      "image": "images/menu/ayambakar.jpg",
+      "desc": "Ayam berbumbu kuning dibakar di atas arang sampai harum.",
+      "taste": "Gurih, Smoky",
+      "spicy": 1,
+      "menuId": "MN-008",
+      "menuName": "Ayam Bakar",
+      "visible": true
+    }
+  ],
+  "promo": [
+    {
+      "id": "PR-001",
+      "name": "Paket Hemat Nasi Rendang",
+      "type": "Diskon Persen",
+      "value": "20%",
+      "startDays": -5,
+      "endDays": 10,
+      "active": true,
+      "website": true,
+      "desc": "Hemat 20% untuk paket nasi rendang pilihan."
+    },
+    {
+      "id": "PR-002",
+      "name": "Gratis Ongkir",
+      "type": "Gratis Ongkir",
+      "value": "Min. Rp100rb",
+      "startDays": -8,
+      "endDays": 14,
+      "active": true,
+      "website": true,
+      "desc": "Gratis ongkir untuk pengantaran area Jakarta dengan minimum transaksi Rp100.000."
+    },
+    {
+      "id": "PR-003",
+      "name": "Hidang Keluarga",
+      "type": "Diskon Persen",
+      "value": "30%",
+      "startDays": -2,
+      "endDays": 20,
+      "active": true,
+      "website": true,
+      "desc": "Hemat 30% untuk paket hidangan keluarga selama periode promo."
+    },
+    {
+      "id": "PR-004",
+      "name": "Promo Akhir Pekan",
+      "type": "Harga Spesial",
+      "value": "Rp99.000",
+      "startDays": -25,
+      "endDays": -15,
+      "active": false,
+      "website": false,
+      "desc": "Paket pilihan akhir pekan dengan harga spesial."
+    }
+  ],
+  "settings": {
+    "adminName": "Admin Utama",
+    "adminRole": "Super Admin",
+    "adminEmail": "",
+    "storeName": "Lamak Bana",
+    "storePhone": "",
+    "storeCity": "Jakarta",
+    "storeAddress": "",
+    "weekdayOpen": "09:00",
+    "weekdayClose": "22:00",
+    "weekendOpen": "08:00",
+    "weekendClose": "23:00",
+    "notifOrder": true,
+    "notifReservation": true,
+    "notifCatering": true,
+    "notifStock": true
+  }
+}

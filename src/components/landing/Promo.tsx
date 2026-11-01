@@ -1,10 +1,10 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { PROMO_DATA_DEFAULT } from "@/data/promo";
-import { useLocalStorage } from "@/hooks/useLocalStorage";
-import { cx, photoUrl } from "@/lib/format";
-import { STORAGE_KEYS } from "@/lib/storage";
+import { useApiList } from "@/hooks/useApiList";
+import { cx, photoUrl, todayISO } from "@/lib/format";
+import { isPromoLive } from "@/lib/promo";
 import type { Promo as PromoType } from "@/types";
 import { useLanding } from "./context";
 
@@ -47,12 +47,17 @@ function PromoCard({ promo, slot }: { promo: PromoType; slot: Slot }) {
 }
 
 export function Promo() {
-  const [all] = useLocalStorage(STORAGE_KEYS.promo, PROMO_DATA_DEFAULT);
-  const list = all.filter((p) => p.active && p.website).slice(0, 3);
+  const { items: all } = useApiList("/api/promo", PROMO_DATA_DEFAULT);
+  // Tanggal dibaca di browser (bukan saat render server) supaya tidak beda dengan hasil hidrasi.
+  const [today, setToday] = useState<string | null>(null);
+  useEffect(() => setToday(todayISO()), []);
+  const list = today ? all.filter((p) => isPromoLive(p, today)).slice(0, 3) : [];
   const left = list.length > 2 ? list.slice(0, 2) : list;
   const right = list.length > 2 ? list[2] : null;
 
-  let body: ReactNode = <p className="kategori-empty text-light">Belum ada promo aktif. Nantikan penawaran berikutnya.</p>;
+  let body: ReactNode = today ? (
+    <p className="kategori-empty text-light">Belum ada promo aktif. Nantikan penawaran berikutnya.</p>
+  ) : null;
   if (list.length > 0) {
     body = (
       <div className="promo-grid" style={right ? undefined : { gridTemplateColumns: "1fr" }}>

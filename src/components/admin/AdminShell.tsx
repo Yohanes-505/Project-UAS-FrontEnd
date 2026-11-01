@@ -3,13 +3,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { ToastProvider } from "@/components/ui/Toast";
-import {
-  CATERING_DATA_DEFAULT,
-  MENU_DATA_DEFAULT,
-  ORDER_DATA_DEFAULT,
-  PROMO_DATA_DEFAULT,
-  RESERVATION_DATA_DEFAULT,
-} from "@/data";
+import { CATERING_DATA_DEFAULT, ORDER_DATA_DEFAULT, RESERVATION_DATA_DEFAULT } from "@/data";
 import { LOGIN_PATH, logout } from "@/lib/auth";
 import { seedStorage, STORAGE_KEYS } from "@/lib/storage";
 import { AuthGuard } from "./AuthGuard";
@@ -27,14 +21,12 @@ export function AdminShell({ children }: { children: ReactNode }) {
   const [notifOpen, setNotifOpen] = useState(false);
   const [logoutOpen, setLogoutOpen] = useState(false);
 
-  // Sama seperti versi HTML: simpan data awal saat admin pertama kali dibuka,
-  // supaya landing page langsung membaca data yang sama.
+  // Pesanan, reservasi, dan katering masih memakai localStorage (belum pindah ke backend).
+  // Menu, kategori, promo, dan pengaturan sudah di database; data awalnya diisi backend.
   useEffect(() => {
     seedStorage(STORAGE_KEYS.orders, ORDER_DATA_DEFAULT);
-    seedStorage(STORAGE_KEYS.menu, MENU_DATA_DEFAULT);
     seedStorage(STORAGE_KEYS.reservations, RESERVATION_DATA_DEFAULT);
     seedStorage(STORAGE_KEYS.catering, CATERING_DATA_DEFAULT);
-    seedStorage(STORAGE_KEYS.promo, PROMO_DATA_DEFAULT);
   }, []);
 
   const handleLogout = () => {

@@ -1,14 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/Icon";
 import { useToast } from "@/components/ui/Toast";
-import { KATEGORI_DEFAULT, SPICY_LABEL } from "@/data/kategori";
-import { useLocalStorage } from "@/hooks/useLocalStorage";
+import { SPICY_LABEL } from "@/data/kategori";
+import { useApiList } from "@/hooks/useApiList";
+import { apiSend, errorMessage, notifyApiChange } from "@/lib/api";
 import { cx, photoUrl } from "@/lib/format";
-import { nextKategoriId } from "@/lib/menu";
-import { STORAGE_KEYS, seedStorage, writeStorage } from "@/lib/storage";
 import type { Kategori, MenuItem } from "@/types";
 import { KategoriEditor } from "./KategoriEditor";
 
@@ -16,38 +15,41 @@ interface KategoriManagerProps { menus: MenuItem[] }
 
 export function KategoriManager({ menus }: KategoriManagerProps) {
   const toast = useToast();
-  const [stored, , ready] = useLocalStorage<Kategori[]>(STORAGE_KEYS.kategori, KATEGORI_DEFAULT);
+  const { items: kategori, create, update, remove: removeKategori } = useApiList<Kategori>("/api/kategori");
   const [editing, setEditing] = useState<Kategori | null>(null);
-  const kategori = Array.isArray(stored) ? stored : KATEGORI_DEFAULT;
-
-  useEffect(() => { if (ready) seedStorage(STORAGE_KEYS.kategori, KATEGORI_DEFAULT); }, [ready]);
-
-  const persist = (next: Kategori[]): boolean => {
-    if (writeStorage(STORAGE_KEYS.kategori, next)) return true;
-    toast("Kategori gagal disimpan: penyimpanan browser penuh. Coba gunakan foto lebih kecil.");
-    return false;
-  };
   const add = () => setEditing({ id: "", name: "", desc: "", taste: "", spicy: 0, menuId: "", menuName: "", image: "", visible: true });
-  const save = (item: Kategori) => {
+  const save = async (item: Kategori) => {
     const newItem = !item.id;
-    const next = newItem ? [...kategori, { ...item, id: nextKategoriId(kategori) }]
-      : kategori.map((previous) => previous.id === item.id ? item : previous);
-    if (!persist(next)) return;
-    toast(newItem ? "Kategori baru berhasil ditambahkan." : "Kategori berhasil diperbarui.");
-    setEditing(null);
+    try {
+      if (newItem) await create(item); else await update(item.id, item);
+      toast(newItem ? "Kategori baru berhasil ditambahkan." : "Kategori berhasil diperbarui.");
+      setEditing(null);
+    } catch (err) {
+      toast(errorMessage(err, "Kategori gagal disimpan."));
+    }
   };
-  const remove = (id: string) => {
-    if (!persist(kategori.filter((item) => item.id !== id))) return;
-    toast("Kategori dihapus.");
-    setEditing(null);
+  const remove = async (id: string) => {
+    try {
+      await removeKategori(id);
+      toast("Kategori dihapus.");
+      setEditing(null);
+    } catch (err) {
+      toast(errorMessage(err, "Kategori gagal dihapus."));
+    }
   };
-  const move = (index: number, direction: -1 | 1) => {
+  const move = async (index: number, direction: -1 | 1) => {
     const target = index + direction;
     if (target < 0 || target >= kategori.length) return;
-    const next = [...kategori];
-    const [item] = next.splice(index, 1);
-    next.splice(target, 0, item);
-    if (persist(next)) toast("Urutan kategori diperbarui.");
+    const ids = kategori.map((item) => item.id);
+    const [id] = ids.splice(index, 1);
+    ids.splice(target, 0, id);
+    try {
+      await apiSend("PUT", "/api/kategori/order", { ids });
+      notifyApiChange("/api/kategori");
+      toast("Urutan kategori diperbarui.");
+    } catch (err) {
+      toast(errorMessage(err, "Urutan kategori gagal disimpan."));
+    }
   };
 
   return (

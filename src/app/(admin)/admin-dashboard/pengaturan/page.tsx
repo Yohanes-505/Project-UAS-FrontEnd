@@ -9,6 +9,7 @@ import { Select } from "@/components/ui/Select";
 import { useToast } from "@/components/ui/Toast";
 import { SETTINGS_DEFAULT } from "@/data/settings";
 import { useSettings } from "@/hooks/useSettings";
+import { errorMessage } from "@/lib/api";
 import { initials } from "@/lib/format";
 import type { Settings } from "@/types";
 
@@ -31,11 +32,14 @@ const HOUR_ROWS: Array<{ title: string; hint: string; open: TimeKey; close: Time
 
 export default function PengaturanPage() {
   const showToast = useToast();
-  const [saved, setSaved, ready] = useSettings();
+  const [saved, setSaved, ready, error] = useSettings();
   const [form, setForm] = useState<Settings>(SETTINGS_DEFAULT);
   const [loaded, setLoaded] = useState(false);
 
-  // Isi form sekali, setelah data dari localStorage terbaca.
+  // Beri tahu admin kalau backend tidak bisa dihubungi.
+  useEffect(() => { if (error) showToast(error); }, [error]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Isi form sekali, setelah data dari backend terbaca.
   useEffect(() => {
     if (ready && !loaded) {
       setForm(saved);
@@ -46,7 +50,7 @@ export default function PengaturanPage() {
   const set = <K extends keyof Settings>(key: K, value: Settings[K]) =>
     setForm((prev) => ({ ...prev, [key]: value }));
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const next: Settings = {
       ...form,
       adminName: form.adminName.trim(),
@@ -71,15 +75,23 @@ export default function PengaturanPage() {
       return;
     }
 
-    setSaved(next);
-    setForm(next);
-    showToast("Pengaturan berhasil disimpan.");
+    try {
+      await setSaved(next);
+      setForm(next);
+      showToast("Pengaturan berhasil disimpan.");
+    } catch (err) {
+      showToast(errorMessage(err, "Pengaturan gagal disimpan."));
+    }
   };
 
-  const handleReset = () => {
-    setSaved(SETTINGS_DEFAULT);
-    setForm(SETTINGS_DEFAULT);
-    showToast("Pengaturan dikembalikan ke default.");
+  const handleReset = async () => {
+    try {
+      await setSaved(SETTINGS_DEFAULT);
+      setForm(SETTINGS_DEFAULT);
+      showToast("Pengaturan dikembalikan ke default.");
+    } catch (err) {
+      showToast(errorMessage(err, "Pengaturan gagal direset."));
+    }
   };
 
   const previewName = form.adminName.trim() || "Admin Utama";
@@ -275,10 +287,10 @@ export default function PengaturanPage() {
       <section className="reveal settings-note" style={{ animationDelay: "220ms" }}>
         <Icon name="database" className="u-size-4" />
         <div>
-          <strong>Mode Prototype</strong>
+          <strong>Tersimpan di Database</strong>
           <span>
-            Pengaturan disimpan pada browser menggunakan localStorage. Saat backend tersedia,
-            bagian ini dapat langsung dihubungkan ke database dan konfigurasi website.
+            Pengaturan disimpan di database SQLite lewat backend, jadi tetap ada saat browser
+            ditutup dan terbaca oleh landing page (jam buka, kontak, alamat).
           </span>
         </div>
       </section>

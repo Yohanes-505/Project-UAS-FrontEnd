@@ -44,3 +44,12 @@ export function nextPromoId(promos: Promo[]): string {
   const max = promos.reduce((n, p) => Math.max(n, Number(p.id.replace(/\D/g, "")) || 0), 0);
   return "PR-" + String(max + 1).padStart(3, "0");
 }
+
+/**
+ * Promo yang boleh tampil ke pelanggan di landing page: dinyalakan admin (Aktif + Website)
+ * DAN periodenya sedang berjalan. Aturan tanggalnya sama dengan `promoStatus` di halaman admin,
+ * jadi yang tampil di landing selalu yang berlabel "Aktif" di admin.
+ */
+export function isPromoLive(promo: Pick<Promo, "active" | "website" | "start" | "end">, today: string): boolean {
+  return promo.website && promoStatus(promo, today) === "Aktif";
+}

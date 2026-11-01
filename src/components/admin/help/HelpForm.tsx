@@ -6,24 +6,38 @@ import { Icon } from "@/components/ui/Icon";
 import { Select } from "@/components/ui/Select";
 import { useToast } from "@/components/ui/Toast";
 import { HELP_CATEGORIES, HELP_MESSAGE_MAX } from "@/data/help";
+import { apiSend, errorMessage } from "@/lib/api";
 
-/** Form "Masih Butuh Bantuan?". Di prototype ini hanya simulasi kirim. */
+/** Form "Masih Butuh Bantuan?". Pertanyaan dikirim ke backend dan disimpan di tabel help_tickets. */
 export function HelpForm() {
   const showToast = useToast();
   const [category, setCategory] = useState("");
   const [subject, setSubject] = useState("");
   const [message, setMessage] = useState("");
+  const [sending, setSending] = useState(false);
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!category || !subject.trim() || !message.trim()) {
       showToast("Lengkapi kategori, judul, dan detail kendala.");
       return;
     }
-    showToast("Pertanyaan berhasil dicatat pada prototype.");
-    setCategory("");
-    setSubject("");
-    setMessage("");
+    setSending(true);
+    try {
+      await apiSend("POST", "/api/help", {
+        category,
+        subject: subject.trim(),
+        message: message.trim(),
+      });
+      showToast("Pertanyaan berhasil dikirim dan tersimpan.");
+      setCategory("");
+      setSubject("");
+      setMessage("");
+    } catch (err) {
+      showToast(errorMessage(err, "Pertanyaan gagal dikirim."));
+    } finally {
+      setSending(false);
+    }
   };
 
   return (
@@ -68,13 +82,13 @@ export function HelpForm() {
         </small>
       </label>
 
-      <Button type="submit" icon="send" className="help-submit">
-        Kirim Pertanyaan
+      <Button type="submit" icon="send" className="help-submit" disabled={sending}>
+        {sending ? "Mengirim..." : "Kirim Pertanyaan"}
       </Button>
 
       <p className="help-form-note">
-        <Icon name="info" className="u-size-3" /> Pada prototype ini, form hanya mensimulasikan
-        pengiriman dan belum terhubung ke sistem tiket.
+        <Icon name="info" className="u-size-3" /> Pertanyaan disimpan di database dan dapat
+        dilihat tim pengembang lewat endpoint GET /api/help.
       </p>
     </form>
   );
