@@ -2,16 +2,15 @@
 
 import { KATEGORI_DEFAULT, SPICY_LABEL } from "@/data/kategori";
 import { MENU_DATA_DEFAULT } from "@/data/menu";
-import { useLocalStorage } from "@/hooks/useLocalStorage";
+import { useApiList } from "@/hooks/useApiList";
 import { photoUrl, rupiah } from "@/lib/format";
-import { STORAGE_KEYS } from "@/lib/storage";
 import { useLanding } from "./context";
 import { LandingModal } from "./LandingModal";
 
 /** Pop up info sebuah kategori. Harga dan tombol pesan hanya muncul kalau kategori terhubung ke menu yang tersedia. */
 export function KategoriModal({ id, onClose }: { id: string | null; onClose: () => void }) {
-  const [kategori] = useLocalStorage(STORAGE_KEYS.kategori, KATEGORI_DEFAULT);
-  const [menu] = useLocalStorage(STORAGE_KEYS.menu, MENU_DATA_DEFAULT);
+  const { items: kategori } = useApiList("/api/kategori", KATEGORI_DEFAULT);
+  const { items: menu } = useApiList("/api/menu", MENU_DATA_DEFAULT);
   const { openOrder } = useLanding();
 
   const k = kategori.find((x) => x.id === id);

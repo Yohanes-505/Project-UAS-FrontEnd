@@ -11,55 +11,58 @@ import { FilterDropdown } from "@/components/ui/FilterDropdown";
 import { Icon } from "@/components/ui/Icon";
 import { StatCard } from "@/components/ui/StatCard";
 import { useToast } from "@/components/ui/Toast";
-import { MENU_DATA_DEFAULT } from "@/data/menu";
-import { useLocalStorage } from "@/hooks/useLocalStorage";
-import { LOW_STOCK_LIMIT, MAX_FEATURED_MENU, MENU_CATEGORIES, nextMenuId } from "@/lib/menu";
-import { STORAGE_KEYS, seedStorage, writeStorage } from "@/lib/storage";
+import { useApiList } from "@/hooks/useApiList";
+import { errorMessage } from "@/lib/api";
+import { LOW_STOCK_LIMIT, MAX_FEATURED_MENU, MENU_CATEGORIES } from "@/lib/menu";
 import type { MenuItem } from "@/types";
 
 export default function MenuPage() {
   const toast = useToast();
-  const [stored, , ready] = useLocalStorage<MenuItem[]>(STORAGE_KEYS.menu, MENU_DATA_DEFAULT);
-  const menus = Array.isArray(stored) ? stored : MENU_DATA_DEFAULT;
+  // Data menu dari backend (SQLite). Tanpa fallback: kalau backend mati, error langsung terlihat.
+  const { items: menus, error, create, update, patch, remove: removeMenu } = useApiList<MenuItem>("/api/menu");
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("Semua");
   const [editing, setEditing] = useState<MenuItem | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
 
-  useEffect(() => { if (ready) seedStorage(STORAGE_KEYS.menu, MENU_DATA_DEFAULT); }, [ready]);
-
-  const persist = (next: MenuItem[]): boolean => {
-    if (writeStorage(STORAGE_KEYS.menu, next)) return true;
-    toast("Gagal menyimpan: penyimpanan browser penuh. Coba gunakan foto bawaan atau hapus foto upload.");
-    return false;
-  };
+  useEffect(() => { if (error) toast(error); }, [error]); // eslint-disable-line react-hooks/exhaustive-deps
   const openNew = () => setEditing({
     id: "", name: "", category: "Daging", price: 0, stock: 0,
     available: true, website: true, featured: false, tone: "rendang", desc: "", image: "",
   });
-  const save = (item: MenuItem) => {
+  const save = async (item: MenuItem) => {
     const isNew = !item.id;
     const others = menus.filter((menu) => menu.featured && menu.id !== item.id);
     if (item.featured && others.length >= MAX_FEATURED_MENU) {
       toast(`Menu Andalan maksimal ${MAX_FEATURED_MENU}. Matikan dulu salah satu: ${others.map((menu) => menu.name).join(", ")}.`);
       return;
     }
-    const next = isNew ? [...menus, { ...item, id: nextMenuId(menus) }]
-      : menus.map((menu) => menu.id === item.id ? item : menu);
-    if (!persist(next)) return;
-    toast(isNew ? `${item.name} berhasil ditambahkan.` : `${item.name} berhasil diperbarui.`);
-    setEditing(null);
+    try {
+      if (isNew) await create(item); else await update(item.id, item);
+      toast(isNew ? `${item.name} berhasil ditambahkan.` : `${item.name} berhasil diperbarui.`);
+      setEditing(null);
+    } catch (err) {
+      toast(errorMessage(err, "Menu gagal disimpan."));
+    }
   };
-  const remove = (id: string) => {
-    if (!persist(menus.filter((item) => item.id !== id))) return;
-    toast("Menu dihapus dari katalog admin.");
-    setEditing(null);
+  const remove = async (id: string) => {
+    try {
+      await removeMenu(id);
+      toast("Menu dihapus dari katalog admin.");
+      setEditing(null);
+    } catch (err) {
+      toast(errorMessage(err, "Menu gagal dihapus."));
+    }
   };
-  const toggle = (id: string, field: "available" | "website") => {
+  const toggle = async (id: string, field: "available" | "website") => {
     const target = menus.find((item) => item.id === id);
     if (!target) return;
-    const next = menus.map((item) => item.id === id ? { ...item, [field]: !item[field] } : item);
-    if (persist(next)) toast(`${target.name}: ${field === "website" ? "tampilan website" : "ketersediaan"} ${target[field] ? "dinonaktifkan" : "diaktifkan"}.`);
+    try {
+      await patch(id, { [field]: !target[field] });
+      toast(`${target.name}: ${field === "website" ? "tampilan website" : "ketersediaan"} ${target[field] ? "dinonaktifkan" : "diaktifkan"}.`);
+    } catch (err) {
+      toast(errorMessage(err, "Perubahan gagal disimpan."));
+    }
   };
 
   const categories = ["Semua", ...new Set([...MENU_CATEGORIES, ...menus.map((menu) => menu.category)])];

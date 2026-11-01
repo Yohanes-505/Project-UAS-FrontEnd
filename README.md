@@ -8,7 +8,19 @@ cp .env.example .env.local
 npm run dev          # http://localhost:3001
 ```
 
-Backend (opsional): `cd backend && npm install && cp .env.example .env && npm start` (port 3000).
+Backend (wajib untuk Menu, Kategori, Promo, Pengaturan, dan Bantuan) — jalankan di terminal terpisah:
+
+```bash
+cd backend
+npm install
+cp .env.example .env     # Windows: copy .env.example .env
+npm start                # http://localhost:3000, database: backend/data/lamak_bana.db
+```
+
+Database SQLite dibuat otomatis saat pertama kali jalan, lengkap dengan data awal.
+Kembalikan ke data awal: hentikan server, lalu `npm run reset-db`.
+Tanggal promo contoh dihitung dari hari database dibuat (bukan tanggal tetap), jadi selalu sedang berjalan.
+Promo di landing hanya tampil kalau toggle Aktif + Website menyala **dan** periodenya sedang berjalan (sama dengan label "Aktif" di admin).
 
 Login admin demo: **admin / lamakbana** di `/security-check`.
 
@@ -41,7 +53,9 @@ hanya memisahkan layout. URL tetap `/`, `/security-check`, `/admin-dashboard/...
   Nama class asli jangan diganti.
 - Bootstrap: di admin dimuat biasa. Di landing & login dimuat lewat `src/styles/bootstrap-layer.css`
   + `bootstrap-compat.css` supaya tampilan identik dengan versi HTML. Jangan edit dua file itu.
-- Data selalu lewat `useLocalStorage(STORAGE_KEYS.xxx, DATA_DEFAULT)` supaya admin dan landing sinkron.
+- Data Menu, Kategori, dan Promo lewat `useApiList("/api/...")`, Pengaturan lewat `useSettings()`; keduanya
+  membaca/menulis ke backend (SQLite) sehingga admin dan landing sinkron. Pesanan, Reservasi, dan Katering masih
+  memakai `useLocalStorage(STORAGE_KEYS.xxx, DATA_DEFAULT)` sampai bagian itu dipindah ke backend.
 - Filter pakai `<FilterDropdown>`, panel detail/editor pakai `<Drawer>`, notifikasi pakai `useToast()`, form select pakai `<Select>`.
 - Tombol "Pesanan/Reservasi/Katering Baru" di header membuka halaman dengan `?aksi=baru`; halaman tujuan langsung membuka form tambah.
 - Satu orang satu branch, PR ke `main`.

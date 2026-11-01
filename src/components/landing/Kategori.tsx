@@ -1,14 +1,13 @@
 "use client";
 
 import { KATEGORI_DEFAULT } from "@/data/kategori";
-import { useLocalStorage } from "@/hooks/useLocalStorage";
+import { useApiList } from "@/hooks/useApiList";
 import { cx, photoUrl } from "@/lib/format";
-import { STORAGE_KEYS } from "@/lib/storage";
 import { useLanding } from "./context";
 
 /** Kartu kategori. Isinya diatur admin lewat halaman Menu (kategori landing page). */
 export function Kategori() {
-  const [all] = useLocalStorage(STORAGE_KEYS.kategori, KATEGORI_DEFAULT);
+  const { items: all } = useApiList("/api/kategori", KATEGORI_DEFAULT);
   const { openKategori, activeKategori } = useLanding();
   const list = all.filter((k) => k.visible);
 

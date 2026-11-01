@@ -4,8 +4,10 @@ import { useMemo, useState, type FormEvent } from "react";
 import { MENU_DATA_DEFAULT } from "@/data/menu";
 import { ORDER_DATA_DEFAULT } from "@/data/orders";
 import { PROMO_DATA_DEFAULT } from "@/data/promo";
+import { useApiList } from "@/hooks/useApiList";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
-import { rupiah } from "@/lib/format";
+import { rupiah, todayISO } from "@/lib/format";
+import { isPromoLive } from "@/lib/promo";
 import { STORAGE_KEYS } from "@/lib/storage";
 import type { Order, OrderItem } from "@/types";
 import { ORDER_CHANNELS, ORDER_CHANNEL_INFO } from "./content";
@@ -30,13 +32,13 @@ export function OrderModal({ options, onClose }: { options: OrderOptions | null;
 }
 
 function OrderForm({ options, onClose }: { options: OrderOptions; onClose: () => void }) {
-  const [menu] = useLocalStorage(STORAGE_KEYS.menu, MENU_DATA_DEFAULT);
-  const [promos] = useLocalStorage(STORAGE_KEYS.promo, PROMO_DATA_DEFAULT);
+  const { items: menu } = useApiList("/api/menu", MENU_DATA_DEFAULT);
+  const { items: promos } = useApiList("/api/promo", PROMO_DATA_DEFAULT);
   const [orders, setOrders] = useLocalStorage(STORAGE_KEYS.orders, ORDER_DATA_DEFAULT);
 
   const available = useMemo(() => menu.filter((m) => m.website && m.available && m.stock > 0), [menu]);
   const promo = useMemo(
-    () => promos.find((p) => p.id === options.promoId && p.active && p.website) ?? null,
+    () => promos.find((p) => p.id === options.promoId && isPromoLive(p, todayISO())) ?? null,
     [promos, options.promoId],
   );
 

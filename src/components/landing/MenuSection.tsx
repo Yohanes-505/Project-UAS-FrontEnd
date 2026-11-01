@@ -2,9 +2,8 @@
 
 import { useMemo, useState } from "react";
 import { MENU_DATA_DEFAULT, menuImage } from "@/data/menu";
-import { useLocalStorage } from "@/hooks/useLocalStorage";
+import { useApiList } from "@/hooks/useApiList";
 import { cx, photoUrl, rupiah } from "@/lib/format";
-import { STORAGE_KEYS } from "@/lib/storage";
 import type { MenuItem } from "@/types";
 import { useLanding } from "./context";
 
@@ -43,9 +42,9 @@ function MenuCard({ item, extra }: { item: MenuItem; extra: boolean }) {
   );
 }
 
-/** Menu dibaca dari localStorage yang sama dengan admin (hanya yang diberi tanda "tampil di website"). */
+/** Menu dibaca dari backend yang sama dengan admin (hanya yang diberi tanda "tampil di website"). */
 export function MenuSection() {
-  const [all] = useLocalStorage(STORAGE_KEYS.menu, MENU_DATA_DEFAULT);
+  const { items: all } = useApiList("/api/menu", MENU_DATA_DEFAULT);
   const [showAll, setShowAll] = useState(false);
 
   // andalan (featured) lebih dulu, 3 pertama langsung tampil, sisanya menunggu "Lihat Semua Menu"

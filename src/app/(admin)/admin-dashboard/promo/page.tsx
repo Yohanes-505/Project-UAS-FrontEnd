@@ -7,11 +7,10 @@ import { PromoRow } from "@/components/admin/promo/PromoRow";
 import { Button } from "@/components/ui/Button";
 import { Icon, type IconName } from "@/components/ui/Icon";
 import { useToast } from "@/components/ui/Toast";
-import { PROMO_DATA_DEFAULT } from "@/data/promo";
-import { useLocalStorage } from "@/hooks/useLocalStorage";
+import { useApiList } from "@/hooks/useApiList";
+import { errorMessage } from "@/lib/api";
 import { cx, isoShift, todayISO } from "@/lib/format";
-import { nextPromoId, PROMO_FILTERS, promoStatus, type PromoStatus } from "@/lib/promo";
-import { STORAGE_KEYS, writeStorage } from "@/lib/storage";
+import { PROMO_FILTERS, promoStatus, type PromoStatus } from "@/lib/promo";
 import type { Promo } from "@/types";
 
 const SUMMARY: Array<{ status: PromoStatus; label: string; icon: IconName; tone: string; delay: number }> = [
@@ -22,7 +21,8 @@ const SUMMARY: Array<{ status: PromoStatus; label: string; icon: IconName; tone:
 
 export default function PromoPage() {
   const showToast = useToast();
-  const [promos] = useLocalStorage<Promo[]>(STORAGE_KEYS.promo, PROMO_DATA_DEFAULT);
+  // Data promo dari backend (SQLite). Tanpa fallback: kalau backend mati, error langsung terlihat.
+  const { items: promos, error, create, update, patch, remove } = useApiList<Promo>("/api/promo");
   const [filter, setFilter] = useState<"Semua" | PromoStatus>("Semua");
   const [editing, setEditing] = useState<Promo | null>(null);
 
@@ -31,16 +31,8 @@ export default function PromoPage() {
   const [today, setToday] = useState<string | null>(null);
   useEffect(() => setToday(todayISO()), []);
 
-  /**
-   * Simpan ke localStorage. Kalau gagal (biasanya karena penyimpanan browser
-   * penuh akibat foto upload), data lama tetap utuh dan admin diberi tahu.
-   * Setelah berhasil, useLocalStorage otomatis memperbarui `promos`.
-   */
-  const persist = (next: Promo[]): boolean => {
-    if (writeStorage(STORAGE_KEYS.promo, next)) return true;
-    showToast("Gagal menyimpan: penyimpanan browser penuh. Coba pakai foto bawaan atau hapus beberapa foto upload.");
-    return false;
-  };
+  // Kalau backend tidak bisa dihubungi, beri tahu admin (daftar promo akan kosong).
+  useEffect(() => { if (error) showToast(error); }, [error]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const openNew = () => {
     const start = today ?? todayISO();
@@ -57,28 +49,36 @@ export default function PromoPage() {
     });
   };
 
-  const handleSave = (promo: Promo) => {
+  const handleSave = async (promo: Promo) => {
     const isNew = !promo.id;
-    const next = isNew
-      ? [...promos, { ...promo, id: nextPromoId(promos) }]
-      : promos.map((p) => (p.id === promo.id ? promo : p));
-    if (!persist(next)) return;
-    showToast(isNew ? "Promo baru berhasil ditambahkan." : "Promo berhasil diperbarui.");
-    setEditing(null);
+    try {
+      if (isNew) await create(promo); else await update(promo.id, promo);
+      showToast(isNew ? "Promo baru berhasil ditambahkan." : "Promo berhasil diperbarui.");
+      setEditing(null);
+    } catch (err) {
+      showToast(errorMessage(err, "Promo gagal disimpan."));
+    }
   };
 
-  const handleDelete = (id: string) => {
-    if (!persist(promos.filter((p) => p.id !== id))) return;
-    showToast("Promo dihapus.");
-    setEditing(null);
+  const handleDelete = async (id: string) => {
+    try {
+      await remove(id);
+      showToast("Promo dihapus.");
+      setEditing(null);
+    } catch (err) {
+      showToast(errorMessage(err, "Promo gagal dihapus."));
+    }
   };
 
-  const toggleWebsite = (id: string) => {
+  const toggleWebsite = async (id: string) => {
     const target = promos.find((p) => p.id === id);
     if (!target) return;
-    const next = promos.map((p) => (p.id === id ? { ...p, website: !p.website } : p));
-    if (!persist(next)) return;
-    showToast(target.website ? "Promo disembunyikan dari website." : "Promo ditampilkan di website.");
+    try {
+      await patch(id, { website: !target.website });
+      showToast(target.website ? "Promo disembunyikan dari website." : "Promo ditampilkan di website.");
+    } catch (err) {
+      showToast(errorMessage(err, "Perubahan gagal disimpan."));
+    }
   };
 
   const rows = today
