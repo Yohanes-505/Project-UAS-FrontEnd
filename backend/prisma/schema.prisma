@@ -1,0 +1,64 @@
+// Schema Prisma untuk database MySQL "lamak_bana"
+// Dipetakan dari backend/schema.sql (tabel menu_items dan orders)
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+enum MenuStatus {
+  tersedia
+  habis
+}
+
+enum OrderChannel {
+  MakanDiTempat @map("Makan di Tempat")
+  AmbilSendiri  @map("Ambil Sendiri")
+  OjekOnline    @map("Ojek Online")
+  Katering
+}
+
+enum OrderStatus {
+  Baru
+  Diproses
+  Siap
+  Selesai
+  Dibatalkan
+}
+
+model MenuItem {
+  id          Int        @id @default(autoincrement()) @db.UnsignedInt
+  name        String     @db.VarChar(120)
+  description String?    @db.Text
+  category    String     @db.VarChar(60)
+  price       Int        @default(0) @db.UnsignedInt
+  stock       Int        @default(0) @db.UnsignedInt
+  image       String?    @db.MediumText
+  status      MenuStatus @default(tersedia)
+  createdAt   DateTime   @default(now()) @map("created_at") @db.Timestamp(0)
+  updatedAt   DateTime   @default(now()) @updatedAt @map("updated_at") @db.Timestamp(0)
+
+  @@index([category], map: "idx_menu_category")
+  @@map("menu_items")
+}
+
+model Order {
+  id        Int          @id @default(autoincrement()) @db.UnsignedInt
+  code      String?      @unique(map: "uq_orders_code") @db.VarChar(30)
+  customer  String       @db.VarChar(120)
+  phone     String?      @db.VarChar(30)
+  channel   OrderChannel @default(MakanDiTempat)
+  total     Int          @default(0) @db.UnsignedInt
+  status    OrderStatus  @default(Baru)
+  createdAt DateTime     @default(now()) @map("created_at") @db.Timestamp(0)
+
+  @@index([createdAt], map: "idx_orders_created")
+  @@index([status], map: "idx_orders_status")
+  @@index([channel], map: "idx_orders_channel")
+  @@map("orders")
+}

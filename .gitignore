@@ -16,3 +16,6 @@ backend/.env
 # misc
 .DS_Store
 npm-debug.log*
+
+# prisma
+backend/generated/

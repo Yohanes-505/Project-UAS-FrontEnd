@@ -1,23 +1,27 @@
-import Link from "next/link";
+import {
+  Hero,
+  Kategori,
+  KenapaKami,
+  Katering,
+  LandingRoot,
+  MenuSection,
+  Promo,
+  Reservasi,
+  Tentang,
+} from "@/components/landing";
 
-/*
- * TODO(Orang 2): susun landing page dari komponen di src/components/landing/
- * (Navbar, Hero, Kategori, MenuSection, Promo, Katering, Tentang, KenapaKami,
- * Reservasi, Footer). CSS-nya sudah ada di src/app/globals.css (bagian LANDING PAGE).
- */
+/** Landing page Lamak Bana. Urutan section mengikuti desain; CSS ada di globals.css (bagian LANDING PAGE). */
 export default function HomePage() {
   return (
-    <main
-      id="konten-utama"
-      style={{ minHeight: "100vh", display: "grid", placeItems: "center", color: "var(--cream)", textAlign: "center" }}
-    >
-      <div>
-        <p style={{ fontFamily: "var(--font-display)", fontSize: 48 }}>LAMAK BANA</p>
-        <p style={{ margin: "12px 0 24px" }}>Landing page sedang dipindahkan ke Next.js.</p>
-        <Link href="/security-check" className="btn-cream">
-          Masuk admin
-        </Link>
-      </div>
-    </main>
+    <LandingRoot>
+      <Hero />
+      <Kategori />
+      <Promo />
+      <MenuSection />
+      <Tentang />
+      <KenapaKami />
+      <Katering />
+      <Reservasi />
+    </LandingRoot>
   );
 }
