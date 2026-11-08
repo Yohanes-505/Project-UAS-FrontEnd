@@ -21,7 +21,7 @@ const SUMMARY: Array<{ status: PromoStatus; label: string; icon: IconName; tone:
 
 export default function PromoPage() {
   const showToast = useToast();
-  // Data promo dari backend (SQLite). Tanpa fallback: kalau backend mati, error langsung terlihat.
+  // Data promo dari backend (PostgreSQL). Tanpa fallback: kalau backend mati, error langsung terlihat.
   const { items: promos, error, create, update, patch, remove } = useApiList<Promo>("/api/promo");
   const [filter, setFilter] = useState<"Semua" | PromoStatus>("Semua");
   const [editing, setEditing] = useState<Promo | null>(null);

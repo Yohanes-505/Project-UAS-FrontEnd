@@ -1,0 +1,153 @@
+// Skema PostgreSQL Lamak Bana (Prisma 7).
+//
+// Ubah skema di file ini, lalu buat migrasi baru:  npm run db:migrate -- --name nama_perubahan
+// Jangan edit tabel langsung di database supaya migrasi semua anggota tim tetap sama.
+//
+// Catatan:
+// - ID Menu/Kategori/Promo tetap teks berformat MN-001, KAT-001, PR-001 (sama dengan frontend).
+// - Nama tabel & kolom di database tetap snake_case (lihat @map / @@map), di kode JavaScript camelCase.
+// - Aturan CHECK (harga >= 0, pedas 0-3, dst.) tidak bisa ditulis di Prisma, jadi ditambahkan
+//   manual di prisma/migrations/20261108000000_init/migration.sql.
+
+// Generator "prisma-client-js" menghasilkan file JavaScript biasa, jadi bisa langsung di-require
+// dari server.js (CommonJS) tanpa langkah build TypeScript. Hasilnya di backend/generated/prisma
+// (tidak di-commit, dibuat ulang otomatis saat `npm install` / `npm run db:generate`).
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------- Menu Makanan ----------
+model MenuItem {
+  id          String   @id @db.VarChar(20)
+  name        String   @db.VarChar(120)
+  category    String   @db.VarChar(60)
+  price       Int      @default(0)
+  stock       Int      @default(0)
+  available   Boolean  @default(true)
+  website     Boolean  @default(true)
+  featured    Boolean  @default(false)
+  tone        String   @default("rendang") @db.VarChar(30)
+  description String   @default("")
+  // NULL = belum diatur admin (frontend pakai foto bawaan menurut nama),
+  // ''   = sengaja tanpa foto, selain itu path foto atau data URL hasil upload.
+  image       String?
+  sortOrder   Int      @default(0) @map("sort_order")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@index([category], map: "idx_menu_category")
+  @@map("menu_items")
+}
+
+// ---------- Kategori Landing Page ----------
+model Kategori {
+  id          String   @id @db.VarChar(20)
+  name        String   @db.VarChar(120)
+  image       String   @default("")
+  description String   @default("")
+  taste       String   @default("") @db.VarChar(120)
+  spicy       Int      @default(0) @db.SmallInt
+  menuId      String   @default("") @map("menu_id") @db.VarChar(20) // menu terkait (boleh kosong)
+  menuName    String   @default("") @map("menu_name") @db.VarChar(120)
+  visible     Boolean  @default(true)
+  sortOrder   Int      @default(0) @map("sort_order")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@map("kategori")
+}
+
+// ---------- Promo ----------
+model Promo {
+  id          String   @id @db.VarChar(20)
+  name        String   @db.VarChar(120)
+  type        String   @default("Diskon Persen") @db.VarChar(40)
+  value       String   @default("") @db.VarChar(60)
+  startDate   DateTime @map("start_date") @db.Date
+  endDate     DateTime @map("end_date") @db.Date
+  active      Boolean  @default(true)
+  website     Boolean  @default(true)
+  description String   @default("")
+  image       String? // arti NULL / '' sama seperti MenuItem.image
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@map("promos")
+}
+
+// ---------- Pengaturan (selalu satu baris, id = 1) ----------
+model Settings {
+  id               Int      @id @default(1)
+  adminName        String   @map("admin_name") @db.VarChar(120)
+  adminRole        String   @map("admin_role") @db.VarChar(60)
+  adminEmail       String   @default("") @map("admin_email") @db.VarChar(160)
+  storeName        String   @map("store_name") @db.VarChar(120)
+  storePhone       String   @default("") @map("store_phone") @db.VarChar(30)
+  storeCity        String   @default("") @map("store_city") @db.VarChar(80)
+  storeAddress     String   @default("") @map("store_address")
+  weekdayOpen      String   @map("weekday_open") @db.VarChar(5) // format HH:MM
+  weekdayClose     String   @map("weekday_close") @db.VarChar(5)
+  weekendOpen      String   @map("weekend_open") @db.VarChar(5)
+  weekendClose     String   @map("weekend_close") @db.VarChar(5)
+  notifOrder       Boolean  @default(true) @map("notif_order")
+  notifReservation Boolean  @default(true) @map("notif_reservation")
+  notifCatering    Boolean  @default(true) @map("notif_catering")
+  notifStock       Boolean  @default(true) @map("notif_stock")
+  updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@map("settings")
+}
+
+// ---------- Bantuan: pertanyaan dari form "Masih Butuh Bantuan?" ----------
+model HelpTicket {
+  id        Int      @id @default(autoincrement())
+  category  String   @db.VarChar(40)
+  subject   String   @db.VarChar(80)
+  message   String   @db.VarChar(400)
+  status    String   @default("Baru") @db.VarChar(20)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@map("help_tickets")
+}
+
+// ---------- Pesanan (bagian anggota lain; belum dipakai frontend) ----------
+// Nilai enum di database tetap teks Indonesia (lihat @map), API juga mengirim teks itu.
+enum OrderChannel {
+  MakanDiTempat @map("Makan di Tempat")
+  AmbilSendiri  @map("Ambil Sendiri")
+  OjekOnline    @map("Ojek Online")
+  Katering      @map("Katering")
+
+  @@map("order_channel")
+}
+
+enum OrderStatus {
+  Baru
+  Diproses
+  Siap
+  Selesai
+  Dibatalkan
+
+  @@map("order_status")
+}
+
+model Order {
+  id        Int          @id @default(autoincrement())
+  code      String?      @unique @db.VarChar(30)
+  customer  String       @db.VarChar(120)
+  phone     String?      @db.VarChar(30)
+  channel   OrderChannel @default(MakanDiTempat)
+  total     Int          @default(0)
+  status    OrderStatus  @default(Baru)
+  createdAt DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([createdAt], map: "idx_orders_created")
+  @@index([status], map: "idx_orders_status")
+  @@index([channel], map: "idx_orders_channel")
+  @@map("orders")
+}

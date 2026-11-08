@@ -289,7 +289,7 @@ export default function PengaturanPage() {
         <div>
           <strong>Tersimpan di Database</strong>
           <span>
-            Pengaturan disimpan di database SQLite lewat backend, jadi tetap ada saat browser
+            Pengaturan disimpan di database PostgreSQL lewat backend, jadi tetap ada saat browser
             ditutup dan terbaca oleh landing page (jam buka, kontak, alamat).
           </span>
         </div>

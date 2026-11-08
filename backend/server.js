@@ -1,13 +1,23 @@
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
-const db = require("./database");
+const prisma = require("./db");
+const { Prisma } = require("./generated/prisma");
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
+// Zona waktu untuk mengelompokkan laporan per hari/bulan (kolom created_at disimpan dalam UTC).
+const APP_TIMEZONE = process.env.APP_TIMEZONE || "Asia/Jakarta";
 
 const MAX_FEATURED_MENU = 3;
 const ORDER_STATUSES = ["Baru", "Diproses", "Siap", "Selesai", "Dibatalkan"];
+// Enum Prisma OrderChannel -> teks yang dipakai API & database.
+const CHANNEL_LABEL = {
+    MakanDiTempat: "Makan di Tempat",
+    AmbilSendiri: "Ambil Sendiri",
+    OjekOnline: "Ojek Online",
+    Katering: "Katering"
+};
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
 
@@ -32,17 +42,39 @@ function toBool(value, fallback) {
     if (value === false || value === 0 || value === "0" || value === "false") return false;
     return fallback;
 }
-const flag = (v) => (v ? 1 : 0);
 const text = (v) => (v === undefined || v === null ? "" : String(v).trim());
 
-/** "MN-" + nomor berikutnya, mis. MN-009. Dipanggil di dalam transaksi. */
-function nextId(table, prefix) {
-    const rows = db.prepare(`SELECT id FROM ${table}`).all();
+/** Kolom DATE PostgreSQL <-> teks "YYYY-MM-DD" di frontend. */
+const dateToIso = (d) => d.toISOString().slice(0, 10);
+const isoToDate = (iso) => new Date(`${iso}T00:00:00.000Z`);
+
+const isUniqueError = (err) => err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002";
+
+/** "MN-" + nomor berikutnya, mis. MN-009. */
+async function nextId(model, prefix) {
+    const rows = await prisma[model].findMany({ select: { id: true } });
     const max = rows.reduce((n, r) => Math.max(n, Number(String(r.id).replace(/\D/g, "")) || 0), 0);
     return `${prefix}-${String(max + 1).padStart(3, "0")}`;
 }
-function nextSort(table) {
-    return db.prepare(`SELECT COALESCE(MAX(sort_order), 0) + 1 AS n FROM ${table}`).get().n;
+async function nextSort(model) {
+    const { _max } = await prisma[model].aggregate({ _max: { sortOrder: true } });
+    return (_max.sortOrder || 0) + 1;
+}
+
+/**
+ * Buat baris baru dengan ID berikutnya. Kalau dua admin menyimpan bersamaan dan mendapat ID yang
+ * sama, PostgreSQL menolak salah satunya (primary key bentrok), lalu dicoba lagi dengan ID baru.
+ */
+async function createWithNextId(model, prefix, data) {
+    for (let attempt = 1; ; attempt++) {
+        try {
+            const id = await nextId(model, prefix);
+            return await prisma[model].create({ data: { ...data, id } });
+        } catch (err) {
+            if (isUniqueError(err) && attempt < 3) continue;
+            throw err;
+        }
+    }
 }
 
 /* ===================== Konversi baris DB <-> bentuk frontend ===================== */
@@ -51,7 +83,7 @@ function nextSort(table) {
 function menuOut(r) {
     const item = {
         id: r.id, name: r.name, category: r.category, price: r.price, stock: r.stock,
-        available: !!r.available, website: !!r.website, featured: !!r.featured,
+        available: r.available, website: r.website, featured: r.featured,
         tone: r.tone, desc: r.description
     };
     if (r.image !== null) item.image = r.image;   // tanpa field image = pakai foto bawaan
@@ -60,31 +92,44 @@ function menuOut(r) {
 function kategoriOut(r) {
     return {
         id: r.id, name: r.name, image: r.image, desc: r.description, taste: r.taste, spicy: r.spicy,
-        menuId: r.menu_id, menuName: r.menu_name, visible: !!r.visible
+        menuId: r.menuId, menuName: r.menuName, visible: r.visible
     };
 }
 function promoOut(r) {
     const item = {
-        id: r.id, name: r.name, type: r.type, value: r.value, start: r.start_date, end: r.end_date,
-        active: !!r.active, website: !!r.website, desc: r.description
+        id: r.id, name: r.name, type: r.type, value: r.value,
+        start: dateToIso(r.startDate), end: dateToIso(r.endDate),
+        active: r.active, website: r.website, desc: r.description
     };
     if (r.image !== null) item.image = r.image;
     return item;
 }
 function settingsOut(r) {
     return {
-        adminName: r.admin_name, adminRole: r.admin_role, adminEmail: r.admin_email,
-        storeName: r.store_name, storePhone: r.store_phone, storeCity: r.store_city, storeAddress: r.store_address,
-        weekdayOpen: r.weekday_open, weekdayClose: r.weekday_close,
-        weekendOpen: r.weekend_open, weekendClose: r.weekend_close,
-        notifOrder: !!r.notif_order, notifReservation: !!r.notif_reservation,
-        notifCatering: !!r.notif_catering, notifStock: !!r.notif_stock
+        adminName: r.adminName, adminRole: r.adminRole, adminEmail: r.adminEmail,
+        storeName: r.storeName, storePhone: r.storePhone, storeCity: r.storeCity, storeAddress: r.storeAddress,
+        weekdayOpen: r.weekdayOpen, weekdayClose: r.weekdayClose,
+        weekendOpen: r.weekendOpen, weekendClose: r.weekendClose,
+        notifOrder: r.notifOrder, notifReservation: r.notifReservation,
+        notifCatering: r.notifCatering, notifStock: r.notifStock
+    };
+}
+function orderOut(r) {
+    return {
+        id: r.id, code: r.code, customer: r.customer, phone: r.phone,
+        channel: CHANNEL_LABEL[r.channel], total: r.total, status: r.status, created_at: r.createdAt
+    };
+}
+function helpOut(r) {
+    return {
+        id: r.id, category: r.category, subject: r.subject, message: r.message,
+        status: r.status, created_at: r.createdAt
     };
 }
 
 /* ============================== Validasi ============================== */
 
-function validateMenu(b, excludeId) {
+async function validateMenu(b, excludeId) {
     const name = text(b.name);
     const category = text(b.category);
     const price = Number(b.price);
@@ -92,46 +137,53 @@ function validateMenu(b, excludeId) {
     if (!name) throw bad("Nama menu wajib diisi");
     if (name.length > 120) throw bad("Nama menu maksimal 120 karakter");
     if (!category) throw bad("Kategori wajib diisi");
+    if (category.length > 60) throw bad("Kategori maksimal 60 karakter");
     if (!Number.isInteger(price) || price < 0) throw bad("Harga harus bilangan bulat 0 atau lebih");
     if (!Number.isInteger(stock) || stock < 0) throw bad("Stok harus bilangan bulat 0 atau lebih");
 
     const featured = toBool(b.featured, false);
     if (featured) {
-        const others = db.prepare("SELECT name FROM menu_items WHERE featured = 1 AND id <> ?").all(excludeId || "");
+        const others = await prisma.menuItem.findMany({
+            where: { featured: true, id: { not: excludeId || "" } },
+            select: { name: true }
+        });
         if (others.length >= MAX_FEATURED_MENU) {
             throw bad(`Menu Andalan maksimal ${MAX_FEATURED_MENU}. Matikan dulu salah satu: ${others.map((o) => o.name).join(", ")}.`);
         }
     }
     return {
         name, category, price, stock,
-        available: flag(toBool(b.available, true)),
-        website: flag(toBool(b.website, true)),
-        featured: flag(featured),
+        available: toBool(b.available, true),
+        website: toBool(b.website, true),
+        featured,
         tone: text(b.tone) || "rendang",
         description: text(b.desc),
         image: typeof b.image === "string" ? b.image : null
     };
 }
 
-function validateKategori(b) {
+async function validateKategori(b) {
     const name = text(b.name);
     const description = text(b.desc);
     const spicy = Number(b.spicy === undefined || b.spicy === "" ? 0 : b.spicy);
     if (!name) throw bad("Nama kategori wajib diisi");
+    if (name.length > 120) throw bad("Nama kategori maksimal 120 karakter");
     if (!description) throw bad("Info singkat kategori wajib diisi");
     if (!Number.isInteger(spicy) || spicy < 0 || spicy > 3) throw bad("Tingkat pedas harus 0 sampai 3");
+    const taste = text(b.taste);
+    if (taste.length > 120) throw bad("Rasa maksimal 120 karakter");
 
     const menuId = text(b.menuId);
     let menuName = "";
     if (menuId) {
-        const menu = db.prepare("SELECT name FROM menu_items WHERE id = ?").get(menuId);
+        const menu = await prisma.menuItem.findUnique({ where: { id: menuId }, select: { name: true } });
         if (!menu) throw bad("Menu terkait tidak ditemukan");
         menuName = menu.name;
     }
     return {
-        name, description, taste: text(b.taste), spicy, menu_id: menuId, menu_name: menuName,
+        name, description, taste, spicy, menuId, menuName,
         image: typeof b.image === "string" ? b.image : "",
-        visible: flag(toBool(b.visible, true))
+        visible: toBool(b.visible, true)
     };
 }
 
@@ -140,13 +192,17 @@ function validatePromo(b) {
     const start = text(b.start);
     const end = text(b.end);
     if (!name || !start || !end) throw bad("Nama promo dan periode wajib diisi");
-    if (!ISO_DATE.test(start) || !ISO_DATE.test(end)) throw bad("Format tanggal harus YYYY-MM-DD");
+    if (name.length > 120) throw bad("Nama promo maksimal 120 karakter");
+    if (!ISO_DATE.test(start) || !ISO_DATE.test(end)
+        || isNaN(isoToDate(start)) || isNaN(isoToDate(end))) throw bad("Format tanggal harus YYYY-MM-DD");
     if (end < start) throw bad("Tanggal berakhir tidak boleh sebelum tanggal mulai");
+    const value = text(b.value);
+    if (value.length > 60) throw bad("Nilai promo maksimal 60 karakter");
     return {
-        name, type: text(b.type) || "Diskon Persen", value: text(b.value),
-        start_date: start, end_date: end,
-        active: flag(toBool(b.active, true)),
-        website: flag(toBool(b.website, true)),
+        name, type: text(b.type) || "Diskon Persen", value,
+        startDate: isoToDate(start), endDate: isoToDate(end),
+        active: toBool(b.active, true),
+        website: toBool(b.website, true),
         description: text(b.desc),
         image: typeof b.image === "string" ? b.image : null
     };
@@ -169,185 +225,155 @@ function validateSettings(b) {
         throw bad("Jam tutup harus lebih akhir dari jam buka");
     }
     if (s.adminEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s.adminEmail)) throw bad("Format email tidak valid");
+    const limits = { adminName: 120, adminRole: 60, adminEmail: 160, storeName: 120, storePhone: 30, storeCity: 80 };
+    for (const [key, max] of Object.entries(limits)) {
+        if (s[key].length > max) throw bad(`Isian terlalu panjang (maksimal ${max} karakter)`);
+    }
     return s;
 }
 
 /* ================================ Dasar ================================ */
 
-app.get("/", (req, res) => res.send("Lamak Bana API Running (SQLite)"));
+app.get("/", (req, res) => res.send("Lamak Bana API Running (PostgreSQL + Prisma)"));
 
-app.get("/api/health", (req, res) => {
-    db.prepare("SELECT 1").get();
-    res.json({ status: "ok", database: "sqlite" });
+app.get("/api/health", async (req, res) => {
+    await prisma.$queryRaw`SELECT 1`;
+    res.json({ status: "ok", database: "postgresql" });
 });
 
 /* ============================== Menu Makanan ============================== */
 
-const selectMenu = db.prepare("SELECT * FROM menu_items WHERE id = ?");
-
-app.get("/api/menu", (req, res) => {
-    const rows = db.prepare("SELECT * FROM menu_items ORDER BY sort_order ASC, id ASC").all();
+app.get("/api/menu", async (req, res) => {
+    const rows = await prisma.menuItem.findMany({ orderBy: [{ sortOrder: "asc" }, { id: "asc" }] });
     res.json(rows.map(menuOut));
 });
 
-app.post("/api/menu", (req, res) => {
-    const v = validateMenu(req.body || {});
-    const created = db.transaction(() => {
-        const id = nextId("menu_items", "MN");
-        db.prepare(
-            `INSERT INTO menu_items
-             (id, name, category, price, stock, available, website, featured, tone, description, image, sort_order)
-             VALUES (@id, @name, @category, @price, @stock, @available, @website, @featured, @tone, @description, @image, @sort_order)`
-        ).run({ ...v, id, sort_order: nextSort("menu_items") });
-        return selectMenu.get(id);
-    })();
+app.post("/api/menu", async (req, res) => {
+    const v = await validateMenu(req.body || {});
+    const created = await createWithNextId("menuItem", "MN", { ...v, sortOrder: await nextSort("menuItem") });
     res.status(201).json(menuOut(created));
 });
 
 /** PUT = simpan semua field; PATCH = ubah sebagian saja (mis. toggle website). Keduanya digabung dengan data lama. */
-function updateMenu(req, res) {
-    const current = selectMenu.get(req.params.id);
+async function updateMenu(req, res) {
+    const current = await prisma.menuItem.findUnique({ where: { id: req.params.id } });
     if (!current) throw notFound("Menu tidak ditemukan");
-    const v = validateMenu({ ...menuOut(current), ...(req.body || {}) }, current.id);
-    db.prepare(
-        `UPDATE menu_items SET name=@name, category=@category, price=@price, stock=@stock,
-         available=@available, website=@website, featured=@featured, tone=@tone,
-         description=@description, image=@image, updated_at=datetime('now') WHERE id=@id`
-    ).run({ ...v, id: current.id });
-    res.json(menuOut(selectMenu.get(current.id)));
+    const v = await validateMenu({ ...menuOut(current), ...(req.body || {}) }, current.id);
+    const updated = await prisma.menuItem.update({ where: { id: current.id }, data: v });
+    res.json(menuOut(updated));
 }
 app.put("/api/menu/:id", updateMenu);
 app.patch("/api/menu/:id", updateMenu);
 
-app.delete("/api/menu/:id", (req, res) => {
-    const result = db.prepare("DELETE FROM menu_items WHERE id = ?").run(req.params.id);
-    if (!result.changes) throw notFound("Menu tidak ditemukan");
+app.delete("/api/menu/:id", async (req, res) => {
+    const { count } = await prisma.menuItem.deleteMany({ where: { id: req.params.id } });
+    if (!count) throw notFound("Menu tidak ditemukan");
     res.json({ message: "Menu berhasil dihapus" });
 });
 
 /* ============================ Kategori Landing Page ============================ */
 
-const selectKategori = db.prepare("SELECT * FROM kategori WHERE id = ?");
-
-app.get("/api/kategori", (req, res) => {
-    const rows = db.prepare("SELECT * FROM kategori ORDER BY sort_order ASC, id ASC").all();
+app.get("/api/kategori", async (req, res) => {
+    const rows = await prisma.kategori.findMany({ orderBy: [{ sortOrder: "asc" }, { id: "asc" }] });
     res.json(rows.map(kategoriOut));
 });
 
-app.post("/api/kategori", (req, res) => {
-    const v = validateKategori(req.body || {});
-    const created = db.transaction(() => {
-        const id = nextId("kategori", "KAT");
-        db.prepare(
-            `INSERT INTO kategori
-             (id, name, image, description, taste, spicy, menu_id, menu_name, visible, sort_order)
-             VALUES (@id, @name, @image, @description, @taste, @spicy, @menu_id, @menu_name, @visible, @sort_order)`
-        ).run({ ...v, id, sort_order: nextSort("kategori") });
-        return selectKategori.get(id);
-    })();
+app.post("/api/kategori", async (req, res) => {
+    const v = await validateKategori(req.body || {});
+    const created = await createWithNextId("kategori", "KAT", { ...v, sortOrder: await nextSort("kategori") });
     res.status(201).json(kategoriOut(created));
 });
 
 // Harus didefinisikan sebelum "/api/kategori/:id".
 // Body: { ids: ["KAT-002", "KAT-001", ...] } = urutan baru, semua ID harus ikut.
-app.put("/api/kategori/order", (req, res) => {
+app.put("/api/kategori/order", async (req, res) => {
     const ids = req.body && req.body.ids;
-    const existing = db.prepare("SELECT id FROM kategori").all().map((r) => r.id);
+    const existing = (await prisma.kategori.findMany({ select: { id: true } })).map((r) => r.id);
     if (!Array.isArray(ids) || ids.length !== existing.length || !ids.every((id) => existing.includes(id))
         || new Set(ids).size !== ids.length) {
         throw bad("Daftar urutan kategori tidak valid");
     }
-    const update = db.prepare("UPDATE kategori SET sort_order = ? WHERE id = ?");
-    db.transaction(() => ids.forEach((id, i) => update.run(i + 1, id)))();
+    await prisma.$transaction(
+        ids.map((id, i) => prisma.kategori.update({ where: { id }, data: { sortOrder: i + 1 } }))
+    );
     res.json({ message: "Urutan kategori diperbarui" });
 });
 
-function updateKategori(req, res) {
-    const current = selectKategori.get(req.params.id);
+async function updateKategori(req, res) {
+    const current = await prisma.kategori.findUnique({ where: { id: req.params.id } });
     if (!current) throw notFound("Kategori tidak ditemukan");
-    const v = validateKategori({ ...kategoriOut(current), ...(req.body || {}) });
-    db.prepare(
-        `UPDATE kategori SET name=@name, image=@image, description=@description, taste=@taste, spicy=@spicy,
-         menu_id=@menu_id, menu_name=@menu_name, visible=@visible, updated_at=datetime('now') WHERE id=@id`
-    ).run({ ...v, id: current.id });
-    res.json(kategoriOut(selectKategori.get(current.id)));
+    const v = await validateKategori({ ...kategoriOut(current), ...(req.body || {}) });
+    const updated = await prisma.kategori.update({ where: { id: current.id }, data: v });
+    res.json(kategoriOut(updated));
 }
 app.put("/api/kategori/:id", updateKategori);
 app.patch("/api/kategori/:id", updateKategori);
 
-app.delete("/api/kategori/:id", (req, res) => {
-    const result = db.prepare("DELETE FROM kategori WHERE id = ?").run(req.params.id);
-    if (!result.changes) throw notFound("Kategori tidak ditemukan");
+app.delete("/api/kategori/:id", async (req, res) => {
+    const { count } = await prisma.kategori.deleteMany({ where: { id: req.params.id } });
+    if (!count) throw notFound("Kategori tidak ditemukan");
     res.json({ message: "Kategori dihapus" });
 });
 
 /* ================================== Promo ================================== */
 
-const selectPromo = db.prepare("SELECT * FROM promos WHERE id = ?");
-
-app.get("/api/promo", (req, res) => {
-    const rows = db.prepare("SELECT * FROM promos ORDER BY id ASC").all();
+app.get("/api/promo", async (req, res) => {
+    const rows = await prisma.promo.findMany({ orderBy: { id: "asc" } });
     res.json(rows.map(promoOut));
 });
 
-app.post("/api/promo", (req, res) => {
+app.post("/api/promo", async (req, res) => {
     const v = validatePromo(req.body || {});
-    const created = db.transaction(() => {
-        const id = nextId("promos", "PR");
-        db.prepare(
-            `INSERT INTO promos (id, name, type, value, start_date, end_date, active, website, description, image)
-             VALUES (@id, @name, @type, @value, @start_date, @end_date, @active, @website, @description, @image)`
-        ).run({ ...v, id });
-        return selectPromo.get(id);
-    })();
+    const created = await createWithNextId("promo", "PR", v);
     res.status(201).json(promoOut(created));
 });
 
-function updatePromo(req, res) {
-    const current = selectPromo.get(req.params.id);
+async function updatePromo(req, res) {
+    const current = await prisma.promo.findUnique({ where: { id: req.params.id } });
     if (!current) throw notFound("Promo tidak ditemukan");
     const v = validatePromo({ ...promoOut(current), ...(req.body || {}) });
-    db.prepare(
-        `UPDATE promos SET name=@name, type=@type, value=@value, start_date=@start_date, end_date=@end_date,
-         active=@active, website=@website, description=@description, image=@image,
-         updated_at=datetime('now') WHERE id=@id`
-    ).run({ ...v, id: current.id });
-    res.json(promoOut(selectPromo.get(current.id)));
+    const updated = await prisma.promo.update({ where: { id: current.id }, data: v });
+    res.json(promoOut(updated));
 }
 app.put("/api/promo/:id", updatePromo);
 app.patch("/api/promo/:id", updatePromo);
 
-app.delete("/api/promo/:id", (req, res) => {
-    const result = db.prepare("DELETE FROM promos WHERE id = ?").run(req.params.id);
-    if (!result.changes) throw notFound("Promo tidak ditemukan");
+app.delete("/api/promo/:id", async (req, res) => {
+    const { count } = await prisma.promo.deleteMany({ where: { id: req.params.id } });
+    if (!count) throw notFound("Promo tidak ditemukan");
     res.json({ message: "Promo dihapus" });
 });
 
 /* ================================ Pengaturan ================================ */
 
-app.get("/api/settings", (req, res) => {
-    res.json(settingsOut(db.prepare("SELECT * FROM settings WHERE id = 1").get()));
+async function getSettingsRow() {
+    const row = await prisma.settings.findUnique({ where: { id: 1 } });
+    if (!row) {
+        throw new HttpError(503, "Data pengaturan belum ada. Jalankan: cd backend && npm run db:seed");
+    }
+    return row;
+}
+
+app.get("/api/settings", async (req, res) => {
+    res.json(settingsOut(await getSettingsRow()));
 });
 
 // Dipakai juga oleh tombol "Reset" (frontend mengirim nilai default).
-app.put("/api/settings", (req, res) => {
-    const current = settingsOut(db.prepare("SELECT * FROM settings WHERE id = 1").get());
+app.put("/api/settings", async (req, res) => {
+    const current = settingsOut(await getSettingsRow());
     const body = { ...current, ...(req.body || {}) };
     const s = validateSettings(body);
-    db.prepare(
-        `UPDATE settings SET admin_name=@adminName, admin_role=@adminRole, admin_email=@adminEmail,
-         store_name=@storeName, store_phone=@storePhone, store_city=@storeCity, store_address=@storeAddress,
-         weekday_open=@weekdayOpen, weekday_close=@weekdayClose, weekend_open=@weekendOpen, weekend_close=@weekendClose,
-         notif_order=@notifOrder, notif_reservation=@notifReservation, notif_catering=@notifCatering,
-         notif_stock=@notifStock, updated_at=datetime('now') WHERE id = 1`
-    ).run({
-        ...s,
-        notifOrder: flag(toBool(body.notifOrder, true)),
-        notifReservation: flag(toBool(body.notifReservation, true)),
-        notifCatering: flag(toBool(body.notifCatering, true)),
-        notifStock: flag(toBool(body.notifStock, true))
+    const updated = await prisma.settings.update({
+        where: { id: 1 },
+        data: {
+            ...s,
+            notifOrder: toBool(body.notifOrder, true),
+            notifReservation: toBool(body.notifReservation, true),
+            notifCatering: toBool(body.notifCatering, true),
+            notifStock: toBool(body.notifStock, true)
+        }
     });
-    res.json(settingsOut(db.prepare("SELECT * FROM settings WHERE id = 1").get()));
+    res.json(settingsOut(updated));
 });
 
 /* ================================== Bantuan ================================== */
@@ -356,11 +382,12 @@ const HELP_CATEGORIES = ["Pesanan", "Menu Makanan", "Reservasi", "Katering", "La
 const HELP_SUBJECT_MAX = 80;
 const HELP_MESSAGE_MAX = 400;
 
-app.get("/api/help", (req, res) => {
-    res.json(db.prepare("SELECT * FROM help_tickets ORDER BY id DESC").all());
+app.get("/api/help", async (req, res) => {
+    const rows = await prisma.helpTicket.findMany({ orderBy: { id: "desc" } });
+    res.json(rows.map(helpOut));
 });
 
-app.post("/api/help", (req, res) => {
+app.post("/api/help", async (req, res) => {
     const b = req.body || {};
     const category = text(b.category);
     const subject = text(b.subject);
@@ -370,13 +397,12 @@ app.post("/api/help", (req, res) => {
     if (subject.length > HELP_SUBJECT_MAX) throw bad(`Judul maksimal ${HELP_SUBJECT_MAX} karakter`);
     if (message.length > HELP_MESSAGE_MAX) throw bad(`Detail kendala maksimal ${HELP_MESSAGE_MAX} karakter`);
 
-    const result = db.prepare("INSERT INTO help_tickets (category, subject, message) VALUES (?, ?, ?)")
-        .run(category, subject, message);
-    res.status(201).json({ message: "Pertanyaan berhasil dicatat", id: Number(result.lastInsertRowid) });
+    const ticket = await prisma.helpTicket.create({ data: { category, subject, message } });
+    res.status(201).json({ message: "Pertanyaan berhasil dicatat", id: ticket.id });
 });
 
 /* ============================================================================
- * Pesanan & laporan: bagian anggota lain. Dipindah dari MySQL ke SQLite apa adanya
+ * Pesanan & laporan: bagian anggota lain. Dipindah ke PostgreSQL apa adanya
  * (belum dipakai frontend, frontend masih membaca pesanan dari localStorage).
  * ========================================================================== */
 
@@ -410,56 +436,54 @@ function resolveRange(query) {
     return { period, from: toDateString(from), to: toDateString(to) };
 }
 
-app.get("/api/orders", (req, res) => {
-    res.json(db.prepare("SELECT * FROM orders ORDER BY id DESC").all());
+app.get("/api/orders", async (req, res) => {
+    const rows = await prisma.order.findMany({ orderBy: { id: "desc" } });
+    res.json(rows.map(orderOut));
 });
 
-app.patch("/api/orders/:id/status", (req, res) => {
+app.patch("/api/orders/:id/status", async (req, res) => {
     const status = req.body && req.body.status;
     if (!ORDER_STATUSES.includes(status)) throw bad("Status pesanan tidak valid");
-    const result = db.prepare("UPDATE orders SET status = ? WHERE id = ?").run(status, req.params.id);
-    if (!result.changes) throw notFound("Pesanan tidak ditemukan");
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) throw notFound("Pesanan tidak ditemukan");
+    const { count } = await prisma.order.updateMany({ where: { id }, data: { status } });
+    if (!count) throw notFound("Pesanan tidak ditemukan");
     res.json({ message: "Status pesanan diperbarui" });
 });
 
-app.get("/api/order-summary", (req, res) => {
-    const row = db.prepare(
-        `SELECT
-            COALESCE(SUM(status='Baru'), 0) AS baru,
-            COALESCE(SUM(status='Diproses'), 0) AS diproses,
-            COALESCE(SUM(status='Siap'), 0) AS siap,
-            COALESCE(SUM(status='Selesai'), 0) AS selesai,
-            COALESCE(SUM(status='Dibatalkan'), 0) AS dibatalkan
-         FROM orders`
-    ).get();
-    res.json(row);
+app.get("/api/order-summary", async (req, res) => {
+    const groups = await prisma.order.groupBy({ by: ["status"], _count: { _all: true } });
+    const count = (status) => groups.find((g) => g.status === status)?._count._all || 0;
+    res.json({
+        baru: count("Baru"), diproses: count("Diproses"), siap: count("Siap"),
+        selesai: count("Selesai"), dibatalkan: count("Dibatalkan")
+    });
 });
 
-app.get("/api/reports/chart", (req, res) => {
+app.get("/api/reports/chart", async (req, res) => {
     const range = resolveRange(req.query);
     if (!range) throw bad("Rentang tanggal tidak valid");
 
-    const channel = req.query.channel && req.query.channel !== "Semua" ? req.query.channel : null;
+    const channel = req.query.channel && req.query.channel !== "Semua" ? String(req.query.channel) : null;
+    if (channel && !Object.values(CHANNEL_LABEL).includes(channel)) throw bad("Channel pesanan tidak valid");
     const monthly = range.period === "Tahun ini";
-    const bucket = monthly ? "strftime('%Y-%m', created_at)" : "date(created_at)";
 
-    const params = [range.from, range.to];
-    let channelClause = "";
-    if (channel) {
-        channelClause = "AND channel = ?";
-        params.push(channel);
-    }
+    // created_at disimpan sebagai timestamptz (UTC); dikonversi ke zona waktu toko sebelum dikelompokkan.
+    const localTime = Prisma.sql`("created_at" AT TIME ZONE ${APP_TIMEZONE})`;
+    const bucket = monthly
+        ? Prisma.sql`to_char(${localTime}, 'YYYY-MM')`
+        : Prisma.sql`to_char(${localTime}::date, 'YYYY-MM-DD')`;
+    const channelClause = channel ? Prisma.sql`AND "channel" = CAST(${channel} AS "order_channel")` : Prisma.empty;
 
-    const rows = db.prepare(
-        `SELECT ${bucket} AS bucket,
-                COUNT(*) AS orders,
-                COALESCE(SUM(CASE WHEN status <> 'Dibatalkan' THEN total ELSE 0 END), 0) AS revenue
-         FROM orders
-         WHERE date(created_at) BETWEEN ? AND ?
-         ${channelClause}
-         GROUP BY bucket
-         ORDER BY bucket ASC`
-    ).all(...params);
+    const rows = await prisma.$queryRaw`
+        SELECT ${bucket} AS bucket,
+               COUNT(*)::int AS orders,
+               COALESCE(SUM(CASE WHEN "status" <> 'Dibatalkan' THEN "total" ELSE 0 END), 0)::int AS revenue
+        FROM "orders"
+        WHERE ${localTime}::date BETWEEN ${range.from}::date AND ${range.to}::date
+        ${channelClause}
+        GROUP BY 1
+        ORDER BY 1 ASC`;
 
     res.json({
         period: range.period, from: range.from, to: range.to, channel: channel || "Semua",
@@ -473,28 +497,56 @@ app.use((req, res) => {
     res.status(404).json({ message: "Endpoint tidak ditemukan" });
 });
 
+/** true kalau error berasal dari koneksi ke PostgreSQL (server mati, password salah, dll.). */
+function isDatabaseDown(err) {
+    if (err instanceof Prisma.PrismaClientInitializationError) return true;
+    // P1000 = login gagal, P1001 = server tidak terjangkau, P1003 = database tidak ada, P1017 = koneksi ditutup.
+    const codes = ["P1000", "P1001", "P1002", "P1003", "P1017", "ECONNREFUSED", "ENOTFOUND", "ETIMEDOUT", "ECONNRESET"];
+    return codes.includes(err.code) || codes.includes(err.cause && err.cause.code);
+}
+
 app.use((err, req, res, next) => {
     if (err instanceof HttpError) return res.status(err.status).json({ message: err.message });
     if (err.type === "entity.too.large") {
         return res.status(413).json({ message: "Ukuran data atau foto terlalu besar" });
     }
     if (err.status && err.status < 500) return res.status(err.status).json({ message: "Data yang dikirim tidak valid" });
+    if (isUniqueError(err)) return res.status(409).json({ message: "Data bentrok dengan data lain. Coba simpan lagi." });
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2025") {
+        return res.status(404).json({ message: "Data tidak ditemukan" });
+    }
     console.error(err);
+    if (isDatabaseDown(err)) {
+        return res.status(503).json({ message: "Database PostgreSQL tidak bisa dihubungi. Cek DATABASE_URL di backend/.env." });
+    }
     res.status(500).json({ message: "Terjadi kesalahan pada server" });
 });
 
 /* ================================== Start ================================== */
 
-const server = app.listen(PORT, () => {
-    console.log(`SQLite: ${db.DB_PATH}`);
-    console.log(`Server running on port ${PORT}`);
-});
+async function start() {
+    try {
+        await prisma.$queryRaw`SELECT 1`;
+    } catch (err) {
+        console.error("Gagal terhubung ke PostgreSQL. Cek DATABASE_URL di backend/.env dan pastikan server PostgreSQL menyala.");
+        console.error(err.message);
+        process.exit(1);
+    }
 
-const shutdown = () => {
-    server.close(() => {
-        db.close();
-        process.exit(0);
+    const server = app.listen(PORT, () => {
+        const { host, pathname } = new URL(process.env.DATABASE_URL);
+        console.log(`PostgreSQL: ${host}${pathname}`);
+        console.log(`Server running on port ${PORT}`);
     });
-};
-process.on("SIGINT", shutdown);
-process.on("SIGTERM", shutdown);
+
+    const shutdown = () => {
+        server.close(async () => {
+            await prisma.$disconnect();
+            process.exit(0);
+        });
+    };
+    process.on("SIGINT", shutdown);
+    process.on("SIGTERM", shutdown);
+}
+
+start();

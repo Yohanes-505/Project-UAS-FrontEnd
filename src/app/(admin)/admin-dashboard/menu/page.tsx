@@ -18,7 +18,7 @@ import type { MenuItem } from "@/types";
 
 export default function MenuPage() {
   const toast = useToast();
-  // Data menu dari backend (SQLite). Tanpa fallback: kalau backend mati, error langsung terlihat.
+  // Data menu dari backend (PostgreSQL). Tanpa fallback: kalau backend mati, error langsung terlihat.
   const { items: menus, error, create, update, patch, remove: removeMenu } = useApiList<MenuItem>("/api/menu");
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("Semua");

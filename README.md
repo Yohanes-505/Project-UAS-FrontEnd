@@ -8,18 +8,37 @@ cp .env.example .env.local
 npm run dev          # http://localhost:3001
 ```
 
-Backend (wajib untuk Menu, Kategori, Promo, Pengaturan, dan Bantuan) — jalankan di terminal terpisah:
+Backend (wajib untuk Menu, Kategori, Promo, Pengaturan, dan Bantuan) memakai **PostgreSQL + Prisma**.
+Siapkan dulu server PostgreSQL (instal lokal, Docker, atau gratisan di Supabase/Neon) dan buat database kosong
+`lamak_bana`. Lalu di terminal terpisah:
 
 ```bash
 cd backend
-npm install
-cp .env.example .env     # Windows: copy .env.example .env
-npm start                # http://localhost:3000, database: backend/data/lamak_bana.db
+cp .env.example .env     # Windows: copy .env.example .env  -> isi DATABASE_URL
+npm install              # otomatis menjalankan `prisma generate`
+npm run db:setup         # buat tabel (migrasi) + isi data awal, cukup sekali
+npm start                # http://localhost:3000
 ```
 
-Database SQLite dibuat otomatis saat pertama kali jalan, lengkap dengan data awal.
-Kembalikan ke data awal: hentikan server, lalu `npm run reset-db`.
-Tanggal promo contoh dihitung dari hari database dibuat (bukan tanggal tetap), jadi selalu sedang berjalan.
+Contoh PostgreSQL lewat Docker (cocok dengan `DATABASE_URL` bawaan di `.env.example`):
+
+```bash
+docker run --name lamak-bana-db -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=lamak_bana -p 5432:5432 -d postgres:16
+```
+
+Perintah database lain (jalankan di folder `backend/`):
+
+| Perintah | Fungsi |
+| --- | --- |
+| `npm run db:setup` | Menjalankan migrasi yang belum ada + seed. Jalankan juga setiap habis `git pull` yang membawa migrasi baru. |
+| `npm run reset-db` | Hapus semua tabel, buat ulang, isi data awal lagi. **Semua data hilang.** |
+| `npm run db:migrate -- --name nama_perubahan` | Setelah mengubah `prisma/schema.prisma`: buat file migrasi baru, lalu commit folder `prisma/migrations`. |
+| `npm run db:studio` | Buka Prisma Studio untuk melihat/mengubah isi tabel di browser. |
+
+Struktur tabel ada di `backend/prisma/schema.prisma`, riwayat perubahannya di `backend/prisma/migrations/`.
+Jangan ubah tabel langsung lewat pgAdmin; ubah `schema.prisma` lalu buat migrasi supaya database semua anggota sama.
+Seed hanya mengisi data awal kalau database masih kosong.
+Tanggal promo contoh dihitung dari hari seed dijalankan (bukan tanggal tetap), jadi selalu sedang berjalan.
 Promo di landing hanya tampil kalau toggle Aktif + Website menyala **dan** periodenya sedang berjalan (sama dengan label "Aktif" di admin).
 
 Login admin demo: **admin / lamakbana** di `/security-check`.
@@ -54,7 +73,7 @@ hanya memisahkan layout. URL tetap `/`, `/security-check`, `/admin-dashboard/...
 - Bootstrap: di admin dimuat biasa. Di landing & login dimuat lewat `src/styles/bootstrap-layer.css`
   + `bootstrap-compat.css` supaya tampilan identik dengan versi HTML. Jangan edit dua file itu.
 - Data Menu, Kategori, dan Promo lewat `useApiList("/api/...")`, Pengaturan lewat `useSettings()`; keduanya
-  membaca/menulis ke backend (SQLite) sehingga admin dan landing sinkron. Pesanan, Reservasi, dan Katering masih
+  membaca/menulis ke backend (PostgreSQL) sehingga admin dan landing sinkron. Pesanan, Reservasi, dan Katering masih
   memakai `useLocalStorage(STORAGE_KEYS.xxx, DATA_DEFAULT)` sampai bagian itu dipindah ke backend.
 - Filter pakai `<FilterDropdown>`, panel detail/editor pakai `<Drawer>`, notifikasi pakai `useToast()`, form select pakai `<Select>`.
 - Tombol "Pesanan/Reservasi/Katering Baru" di header membuka halaman dengan `?aksi=baru`; halaman tujuan langsung membuka form tambah.
