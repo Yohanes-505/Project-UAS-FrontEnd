@@ -1,7 +1,7 @@
 import { cx } from "@/lib/format";
 
 interface BookingTabsProps<S extends string> {
-  prefix: "reservation" | "catering";
+  prefix: "reservation" | "catering" | "order";
   statuses: readonly S[];
   active: S;
   /** Jumlah data per status. */
