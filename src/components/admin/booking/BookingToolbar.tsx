@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { Icon } from "@/components/ui/Icon";
 
 interface BookingToolbarProps {
-  prefix: "reservation" | "catering";
+  prefix: "reservation" | "catering" | "order";
   placeholder: string;
   search: string;
   onSearch: (value: string) => void;
