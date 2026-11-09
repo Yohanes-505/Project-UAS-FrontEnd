@@ -549,4 +549,5 @@ async function start() {
     process.on("SIGTERM", shutdown);
 }
 
-start();
+module.exports = app;
+if (!process.env.VERCEL) start();
