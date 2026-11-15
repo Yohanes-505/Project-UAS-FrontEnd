@@ -1,3 +1,4 @@
+import { todayISO } from "@/lib/format";
 import type { StatusStyle } from "@/types";
 
 /**
@@ -5,11 +6,11 @@ import type { StatusStyle } from "@/types";
  */
 
 /**
- * "Hari ini" di halaman Reservasi & Katering. Data awal (seed) dibuat untuk
- * 28 September 2026, jadi tanggal ini dikunci supaya demo selalu terisi,
- * sama seperti versi HTML (RESERVATION_TODAY / CATERING_TODAY).
+ * "Hari ini" di halaman Reservasi & Katering (tanggal lokal browser, "2026-11-15").
+ * Dulu dikunci ke 28 Sep 2026 untuk demo, akibatnya reservasi/katering asli dari website
+ * tidak pernah lolos filter "Hari ini" / "7 hari" dan terlihat seperti tidak masuk.
  */
-export const DEMO_TODAY = "2026-09-28";
+export const bookingToday = (): string => todayISO();
 
 /** Pilihan "Sumber" di form dan filter. */
 export const BOOKING_SOURCES = ["Website", "WhatsApp", "Telepon", "Admin"];

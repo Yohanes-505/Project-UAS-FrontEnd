@@ -16,29 +16,30 @@ import {
 import { Button } from "@/components/ui/Button";
 import { FilterDropdown } from "@/components/ui/FilterDropdown";
 import { useToast } from "@/components/ui/Toast";
-import { CATERING_DATA_DEFAULT, DROPDOWN_OPTIONS } from "@/data";
-import { useLocalStorage } from "@/hooks/useLocalStorage";
+import { DROPDOWN_OPTIONS } from "@/data";
+import { useApiList } from "@/hooks/useApiList";
 import { QUICK_ACTION_NEW, QUICK_ACTION_PARAM } from "@/lib/admin-nav";
-import { DEMO_TODAY } from "@/lib/booking";
+import { apiSend, errorMessage, notifyApiChange } from "@/lib/api";
+import { bookingToday } from "@/lib/booking";
 import {
   CATERING_FILTERS_DEFAULT,
   CATERING_NEXT,
   CATERING_TABS,
   cateringBase,
   filterCatering,
-  nextCateringId,
   type CateringFilters,
 } from "@/lib/catering";
-import { seedStorage, STORAGE_KEYS, writeStorage } from "@/lib/storage";
 import type { Catering } from "@/types";
 
+const PATH = "/api/catering";
+
 /** pesanan kosong untuk form katering brus */
-const BLANK: Catering = {
+const blank = (): Catering => ({
   id: "",
   customer: "",
   pic: "",
   phone: "",
-  date: DEMO_TODAY,
+  date: bookingToday(),
   time: "12:00",
   pax: 20,
   event: "Acara Kantor",
@@ -51,7 +52,7 @@ const BLANK: Catering = {
   status: "Menunggu",
   note: "",
   createdAt: "",
-};
+});
 
 function KateringContent() {
   const showToast = useToast();
@@ -59,52 +60,56 @@ function KateringContent() {
   const pathname = usePathname();
   const params = useSearchParams();
 
-  const [stored, , ready] = useLocalStorage<Catering[]>(STORAGE_KEYS.catering, CATERING_DATA_DEFAULT);
-  const catering = Array.isArray(stored) ? stored : CATERING_DATA_DEFAULT;
+  // Data dari database, jadi permintaan dari landing page (HP pelanggan) langsung terlihat di sini.
+  const { items: catering, ready, error: loadError, reload } = useApiList<Catering>(PATH);
 
   const [filters, setFilters] = useState<CateringFilters>(CATERING_FILTERS_DEFAULT);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editing, setEditing] = useState<Catering | null>(null);
 
-  useEffect(() => { if (ready) seedStorage(STORAGE_KEYS.catering, CATERING_DATA_DEFAULT); }, [ready]);
+  // Ambil ulang tiap 20 detik supaya data baru dari website muncul tanpa refresh.
+  useEffect(() => {
+    const timer = window.setInterval(reload, 20000);
+    return () => window.clearInterval(timer);
+  }, [reload]);
 
   const handledQuick = useRef(false);
   useEffect(() => {
     if (handledQuick.current || params.get(QUICK_ACTION_PARAM) !== QUICK_ACTION_NEW) return;
     handledQuick.current = true;
-    setEditing(BLANK);
+    setEditing(blank());
     router.replace(pathname);
   }, [params, pathname, router]);
 
   const patchFilters = (patch: Partial<CateringFilters>) => setFilters((f) => ({ ...f, ...patch }));
 
-  /** simpen ke localStorage kalo gagal ksh tau admin dan data lama tetap utuh */
-  const persist = (next: Catering[]): boolean => {
-    if (writeStorage(STORAGE_KEYS.catering, next)) return true;
-    showToast("Gagal menyimpan: penyimpanan browser penuh.");
-    return false;
-  };
+  const selected = catering.find((x) => x.id === selectedId) ?? null;
 
-  const selected = catering.find((c) => c.id === selectedId) ?? null;
-
-  const handleSave = (payload: CateringPayload) => {
+  const handleSave = async (payload: CateringPayload) => {
     if (!editing) return;
-    if (editing.id) {
-      const next = catering.map((c) => (c.id === editing.id ? { ...c, ...payload } : c));
-      if (!persist(next)) return;
-      showToast(`${editing.id} berhasil diperbarui.`);
-    } else {
-      const id = nextCateringId(catering);
-      const next = [...catering, { ...payload, id, createdAt: "28 Sep 2026 · sekarang" }];
-      if (!persist(next)) return;
-      showToast(`${id} berhasil dibuat.`);
+    try {
+      if (editing.id) {
+        await apiSend<Catering>("PUT", `${PATH}/${encodeURIComponent(editing.id)}`, payload);
+        showToast(`${editing.id} berhasil diperbarui.`);
+      } else {
+        const saved = await apiSend<Catering>("POST", PATH, payload);
+        showToast(`${saved.id} berhasil dibuat.`);
+      }
+      notifyApiChange(PATH);
+      setEditing(null);
+    } catch (err) {
+      showToast(errorMessage(err, "Gagal menyimpan pesanan katering."));
     }
-    setEditing(null);
   };
 
-  const setStatus = (c: Catering, status: Catering["status"], message: string) => {
-    const next = catering.map((item) => (item.id === c.id ? { ...item, status } : item));
-    if (persist(next)) showToast(message);
+  const setStatus = async (item: Catering, status: Catering["status"], message: string) => {
+    try {
+      await apiSend<Catering>("PATCH", `${PATH}/${encodeURIComponent(item.id)}`, { status });
+      notifyApiChange(PATH);
+      showToast(message);
+    } catch (err) {
+      showToast(errorMessage(err, "Gagal memperbarui status."));
+    }
   };
 
   const advance = (c: Catering) => {
@@ -125,11 +130,17 @@ function KateringContent() {
         badge={<WebsiteSyncPill />}
         subtitle="Kelola permintaan nasi kotak dan prasmanan untuk pernikahan, acara kantor, arisan, dan syukuran."
         actions={
-          <Button id="btn-add-catering" variant="pill" icon="plus" onClick={() => setEditing(BLANK)}>
+          <Button id="btn-add-catering" variant="pill" icon="plus" onClick={() => setEditing(blank())}>
             Katering Baru
           </Button>
         }
       />
+
+      {loadError && (
+        <p className="u-text-sm" role="alert" style={{ color: "#b42318" }}>
+          {loadError}
+        </p>
+      )}
 
       <CateringStats
         catering={catering}
@@ -177,7 +188,7 @@ function KateringContent() {
 
         <div className="d-flex flex-wrap align-items-center justify-content-between u-gap-3 u-pt-1">
           <p id="catering-count" className="u-text-xs ink60">
-            Menampilkan {visible.length} dari {catering.length} pesanan katering
+            {ready ? `Menampilkan ${visible.length} dari ${catering.length} pesanan katering` : "Memuat data katering…"}
           </p>
           <span className="table-footer-note">Gunakan filter untuk mempersempit data</span>
         </div>

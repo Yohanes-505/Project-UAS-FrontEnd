@@ -1,13 +1,11 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { CATERING_DATA_DEFAULT } from "@/data/catering";
-import { useLocalStorage } from "@/hooks/useLocalStorage";
+import { apiSend, errorMessage, notifyApiChange } from "@/lib/api";
 import { rupiah, todayISO, isoShift } from "@/lib/format";
-import { STORAGE_KEYS } from "@/lib/storage";
 import type { Catering } from "@/types";
 import { CATERING_EVENTS, CATERING_RULES, type CateringService } from "./content";
-import { isValidPhone, nextId, stempelWaktu } from "./lib";
+import { isValidPhone } from "./lib";
 import { LandingModal, ModalHead } from "./LandingModal";
 
 const SERVICES = Object.keys(CATERING_RULES) as CateringService[];
@@ -22,7 +20,6 @@ export function CateringModal({ open, onClose }: { open: boolean; onClose: () =>
 }
 
 function CateringForm({ onClose }: { onClose: () => void }) {
-  const [list, setList] = useLocalStorage(STORAGE_KEYS.catering, CATERING_DATA_DEFAULT);
   const minDate = isoShift(todayISO(), 2);
 
   const [customer, setCustomer] = useState("");
@@ -37,6 +34,7 @@ function CateringForm({ onClose }: { onClose: () => void }) {
   const [address, setAddress] = useState("");
   const [note, setNote] = useState("");
   const [error, setError] = useState("");
+  const [sending, setSending] = useState(false);
   const [done, setDone] = useState<{ id: string; text: string } | null>(null);
 
   const rule = CATERING_RULES[service];
@@ -48,17 +46,16 @@ function CateringForm({ onClose }: { onClose: () => void }) {
     setPax((p) => Math.max(p, CATERING_RULES[s].minPax));
   }
 
-  function submit(e: FormEvent) {
+  async function submit(e: FormEvent) {
     e.preventDefault();
+    if (sending) return;
     if (customer.trim().length < 2) return setError("Isi nama pemesan atau instansi.");
     if (!isValidPhone(phone)) return setError("Nomor WhatsApp belum valid. Contoh: 0812-3456-7890.");
     if (!date || date < minDate) return setError("Katering dipesan minimal 2 hari sebelum acara.");
     if (pax < rule.minPax) return setError(`Minimal pesanan ${service} adalah ${rule.minPax} ${rule.unit}.`);
     if (address.trim().length < 5) return setError("Isi alamat pengantaran.");
 
-    const id = nextId(list.map((c) => c.id), "KT");
-    const record: Catering = {
-      id,
+    const record: Omit<Catering, "id" | "createdAt"> = {
       customer: customer.trim(),
       pic: pic.trim() || customer.trim(),
       phone: phone.trim(),
@@ -74,10 +71,18 @@ function CateringForm({ onClose }: { onClose: () => void }) {
       source: "Website",
       status: "Menunggu",
       note: note.trim() || "Tidak ada catatan.",
-      createdAt: stempelWaktu(),
     };
-    setList((prev) => [record, ...prev]);
-    setDone({ id, text: `${pkg} · ${pax} ${rule.unit} · ${date} pukul ${time}` });
+    setError("");
+    setSending(true);
+    try {
+      const saved = await apiSend<Catering>("POST", "/api/catering", record);
+      notifyApiChange("/api/catering");
+      setDone({ id: saved.id, text: `${pkg} · ${pax} ${rule.unit} · ${date} pukul ${time}` });
+    } catch (err) {
+      setError(errorMessage(err, "Permintaan gagal dikirim. Coba lagi."));
+    } finally {
+      setSending(false);
+    }
   }
 
   if (done) {
@@ -198,8 +203,8 @@ function CateringForm({ onClose }: { onClose: () => void }) {
           {error}
         </p>
       )}
-      <button type="submit" className="btn-solid-red order-submit">
-        Kirim Permintaan
+      <button type="submit" className="btn-solid-red order-submit" disabled={sending}>
+        {sending ? "Mengirim…" : "Kirim Permintaan"}
       </button>
     </form>
   );

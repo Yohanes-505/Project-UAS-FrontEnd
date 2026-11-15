@@ -1,5 +1,5 @@
 import { isoShift } from "@/lib/format";
-import { byDateTime, DEMO_TODAY, idNumber, textMatches } from "@/lib/booking";
+import { byDateTime, bookingToday, idNumber, textMatches } from "@/lib/booking";
 import type { Reservation, ReservationStatus, Settings } from "@/types";
 import type { IconName } from "@/components/ui/Icon";
 
@@ -50,13 +50,14 @@ export const RESERVATION_FILTERS_DEFAULT: ReservationFilters = {
   search: "",
   status: "Semua",
   source: "Semua",
-  date: "Hari ini",
+  // "Semua Tanggal" supaya reservasi baru dari website (mis. untuk besok) langsung terlihat.
+  date: "Semua Tanggal",
 };
 
 function matchesDate(r: Reservation, filter: string): boolean {
-  if (filter === "Hari ini") return r.date === DEMO_TODAY;
-  if (filter === "Besok") return r.date === isoShift(DEMO_TODAY, 1);
-  if (filter === "7 hari") return r.date >= DEMO_TODAY && r.date <= isoShift(DEMO_TODAY, 6);
+  if (filter === "Hari ini") return r.date === bookingToday();
+  if (filter === "Besok") return r.date === isoShift(bookingToday(), 1);
+  if (filter === "7 hari") return r.date >= bookingToday() && r.date <= isoShift(bookingToday(), 6);
   return true; // "Semua Tanggal"
 }
 
@@ -78,7 +79,7 @@ export function filterReservations(list: Reservation[], f: ReservationFilters): 
 
 /** Reservasi hari ini yang belum dibatalkan. */
 export function todaysReservations(list: Reservation[]): Reservation[] {
-  return list.filter((r) => r.date === DEMO_TODAY && r.status !== "Dibatalkan");
+  return list.filter((r) => r.date === bookingToday() && r.status !== "Dibatalkan");
 }
 
 export function reservationStats(list: Reservation[]) {

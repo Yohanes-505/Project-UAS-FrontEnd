@@ -2,17 +2,15 @@
 
 import { useMemo, useState, type FormEvent } from "react";
 import { MENU_DATA_DEFAULT } from "@/data/menu";
-import { ORDER_DATA_DEFAULT } from "@/data/orders";
 import { PROMO_DATA_DEFAULT } from "@/data/promo";
 import { useApiList } from "@/hooks/useApiList";
-import { useLocalStorage } from "@/hooks/useLocalStorage";
+import { apiSend, errorMessage, notifyApiChange } from "@/lib/api";
 import { rupiah, todayISO } from "@/lib/format";
 import { isPromoLive } from "@/lib/promo";
-import { STORAGE_KEYS } from "@/lib/storage";
-import type { Order, OrderItem } from "@/types";
+import type { Order } from "@/types";
 import { ORDER_CHANNELS, ORDER_CHANNEL_INFO } from "./content";
 import type { OrderOptions } from "./context";
-import { isValidPhone, jamMenit, nextId, promoPercent, stempelWaktu, tanggalPendek } from "./lib";
+import { isValidPhone, promoPercent } from "./lib";
 import { LandingModal, ModalHead } from "./LandingModal";
 
 interface Row {
@@ -22,7 +20,7 @@ interface Row {
 
 const MAX_QTY = 20;
 
-/** Modal "Pesan Sekarang". Pesanan disimpan ke localStorage yang sama dengan dashboard admin. */
+/** Modal "Pesan Sekarang". Pesanan dikirim ke backend (PostgreSQL) sehingga langsung muncul di halaman Pesanan admin. */
 export function OrderModal({ options, onClose }: { options: OrderOptions | null; onClose: () => void }) {
   return (
     <LandingModal open={options !== null} onClose={onClose} labelledBy="orderTitle">
@@ -34,7 +32,6 @@ export function OrderModal({ options, onClose }: { options: OrderOptions | null;
 function OrderForm({ options, onClose }: { options: OrderOptions; onClose: () => void }) {
   const { items: menu } = useApiList("/api/menu", MENU_DATA_DEFAULT);
   const { items: promos } = useApiList("/api/promo", PROMO_DATA_DEFAULT);
-  const [orders, setOrders] = useLocalStorage(STORAGE_KEYS.orders, ORDER_DATA_DEFAULT);
 
   const available = useMemo(() => menu.filter((m) => m.website && m.available && m.stock > 0), [menu]);
   const promo = useMemo(
@@ -48,6 +45,7 @@ function OrderForm({ options, onClose }: { options: OrderOptions; onClose: () =>
   const [note, setNote] = useState("");
   const [rows, setRows] = useState<Row[]>([{ menuId: options.menuId ?? "", qty: 1 }]);
   const [error, setError] = useState("");
+  const [sending, setSending] = useState(false);
   const [done, setDone] = useState<{ id: string; name: string } | null>(null);
 
   const priceOf = (id: string) => menu.find((m) => m.id === id)?.price ?? 0;
@@ -59,8 +57,9 @@ function OrderForm({ options, onClose }: { options: OrderOptions; onClose: () =>
   const updateRow = (i: number, patch: Partial<Row>) =>
     setRows((prev) => prev.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
 
-  function submit(e: FormEvent) {
+  async function submit(e: FormEvent) {
     e.preventDefault();
+    if (sending) return;
     if (name.trim().length < 2) return setError("Isi nama pemesan dulu ya.");
     if (!isValidPhone(phone)) return setError("Nomor WhatsApp belum valid. Contoh: 0812-3456-7890.");
 
@@ -72,38 +71,31 @@ function OrderForm({ options, onClose }: { options: OrderOptions; onClose: () =>
     }
     if (merged.size === 0) return setError("Pilih minimal satu menu.");
 
-    const items: OrderItem[] = [];
     for (const [id, qty] of merged) {
       const m = menu.find((x) => x.id === id);
-      if (!m) continue;
-      if (qty > m.stock) return setError(`Stok ${m.name} tinggal ${m.stock}.`);
-      items.push([m.name, qty, rupiah(m.price)]);
+      if (m && qty > m.stock) return setError(`Stok ${m.name} tinggal ${m.stock}.`);
     }
 
-    const now = new Date();
-    const id = nextId(orders.map((o) => o.id), "LB", now);
-    const catatan = [note.trim(), promo ? `Promo: ${promo.name}` : ""].filter(Boolean).join(" · ");
-    const order: Order = {
-      id,
-      customer: name.trim(),
-      phone: phone.trim(),
-      items,
-      summary: items.map(([n, q]) => `${n} ×${q}`).join(", "),
-      channel,
-      channelInfo: ORDER_CHANNEL_INFO[channel],
-      time: jamMenit(now),
-      date: tanggalPendek(now),
-      total: rupiah(total),
-      subtotal: rupiah(subtotal),
-      discount: rupiah(discount),
-      status: "Baru",
-      payment: "Bayar di kasir",
-      paymentStatus: "BELUM BAYAR",
-      note: catatan || "Tidak ada catatan.",
-      timeline: [[jamMenit(now), "Pesanan diterima"]],
-    };
-    setOrders((prev) => [order, ...prev]);
-    setDone({ id, name: name.trim() });
+    // Harga, diskon, ID, dan jam dihitung ulang oleh backend.
+    setError("");
+    setSending(true);
+    try {
+      const order = await apiSend<Order>("POST", "/api/orders", {
+        customer: name.trim(),
+        phone: phone.trim(),
+        channel,
+        channelInfo: ORDER_CHANNEL_INFO[channel],
+        note: note.trim(),
+        promoId: promo?.id,
+        items: [...merged].map(([menuId, qty]) => ({ menuId, qty })),
+      });
+      notifyApiChange("/api/orders");
+      setDone({ id: order.id, name: name.trim() });
+    } catch (err) {
+      setError(errorMessage(err, "Pesanan gagal dikirim. Coba lagi."));
+    } finally {
+      setSending(false);
+    }
   }
 
   if (done) {
@@ -220,8 +212,8 @@ function OrderForm({ options, onClose }: { options: OrderOptions; onClose: () =>
           {error}
         </p>
       )}
-      <button type="submit" className="btn-solid-red order-submit">
-        Kirim Pesanan
+      <button type="submit" className="btn-solid-red order-submit" disabled={sending}>
+        {sending ? "Mengirim…" : "Kirim Pesanan"}
       </button>
     </form>
   );

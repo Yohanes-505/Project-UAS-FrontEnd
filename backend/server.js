@@ -11,7 +11,7 @@ const APP_TIMEZONE = process.env.APP_TIMEZONE || "Asia/Jakarta";
 
 const MAX_FEATURED_MENU = 3;
 const ORDER_STATUSES = ["Baru", "Diproses", "Siap", "Selesai", "Dibatalkan"];
-// Enum Prisma OrderChannel -> teks yang dipakai API & database.
+// Kanal pesanan yang diterima API (kolom orders.channel).
 const CHANNEL_LABEL = {
     MakanDiTempat: "Makan di Tempat",
     AmbilSendiri: "Ambil Sendiri",
@@ -112,12 +112,6 @@ function settingsOut(r) {
         weekendOpen: r.weekendOpen, weekendClose: r.weekendClose,
         notifOrder: r.notifOrder, notifReservation: r.notifReservation,
         notifCatering: r.notifCatering, notifStock: r.notifStock
-    };
-}
-function orderOut(r) {
-    return {
-        id: r.id, code: r.code, customer: r.customer, phone: r.phone,
-        channel: CHANNEL_LABEL[r.channel], total: r.total, status: r.status, created_at: r.createdAt
     };
 }
 function helpOut(r) {
@@ -402,9 +396,320 @@ app.post("/api/help", async (req, res) => {
 });
 
 /* ============================================================================
- * Pesanan & laporan: bagian anggota lain. Dipindah ke PostgreSQL apa adanya
- * (belum dipakai frontend, frontend masih membaca pesanan dari localStorage).
+ * Pesanan, Reservasi, Katering
+ * Dulu disimpan di localStorage browser, jadi pesanan dari HP pelanggan tidak pernah
+ * sampai ke browser admin. Sekarang semuanya lewat PostgreSQL.
  * ========================================================================== */
+
+const BULAN = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
+const ORDER_CHANNELS = Object.values(CHANNEL_LABEL);
+const RESERVATION_STATUSES = ["Menunggu", "Dikonfirmasi", "Hadir", "Selesai", "Dibatalkan"];
+const CATERING_STATUSES = ["Menunggu", "Penawaran", "Dikonfirmasi", "Produksi", "Selesai", "Dibatalkan"];
+const MAX_ORDER_QTY = 100;
+
+/** Jam & tanggal sekarang menurut APP_TIMEZONE (server Vercel berjalan di UTC). */
+function localParts(date = new Date()) {
+    const parts = Object.fromEntries(
+        new Intl.DateTimeFormat("en-CA", {
+            timeZone: APP_TIMEZONE, year: "numeric", month: "2-digit", day: "2-digit",
+            hour: "2-digit", minute: "2-digit", hourCycle: "h23"
+        }).formatToParts(date).map((p) => [p.type, p.value])
+    );
+    return { y: parts.year, m: parts.month, d: parts.day, hh: parts.hour, mm: parts.minute };
+}
+const jamMenit = (date) => { const p = localParts(date); return `${p.hh}:${p.mm}`; };
+/** "25 Okt 2026" */
+const tanggalPendek = (date) => { const p = localParts(date); return `${p.d} ${BULAN[Number(p.m) - 1]} ${p.y}`; };
+/** "25 Okt 2026 · 14:05" */
+const stempelWaktu = (date) => `${tanggalPendek(date)} · ${jamMenit(date)}`;
+const todayIso = () => { const p = localParts(); return `${p.y}-${p.m}-${p.d}`; };
+/** 79000 -> "Rp79.000" (sama dengan rupiah() di frontend) */
+const rupiah = (n) => "Rp" + Number(n || 0).toLocaleString("id-ID");
+const toInt = (v, fallback = 0) => (v === undefined || v === null || v === "" ? fallback : Number(v));
+
+/** "#LB-2611-007": nomor urut per bulan, dibuat backend supaya tidak bentrok antar-browser. */
+async function nextMonthlyId(model, prefix) {
+    const p = localParts();
+    const head = `#${prefix}-${p.y.slice(2)}${p.m}-`;
+    const rows = await prisma[model].findMany({ where: { id: { startsWith: head } }, select: { id: true } });
+    const max = rows.reduce((n, r) => Math.max(n, Number(r.id.slice(head.length)) || 0), 0);
+    return head + String(max + 1).padStart(3, "0");
+}
+async function createWithMonthlyId(model, prefix, data) {
+    for (let attempt = 1; ; attempt++) {
+        try {
+            const id = await nextMonthlyId(model, prefix);
+            return await prisma[model].create({ data: { ...data, id } });
+        } catch (err) {
+            if (isUniqueError(err) && attempt < 5) continue;
+            throw err;
+        }
+    }
+}
+
+function limit(value, max, label) {
+    if (value.length > max) throw bad(`${label} maksimal ${max} karakter`);
+    return value;
+}
+function isoDate(value, label) {
+    const v = text(value);
+    if (!ISO_DATE.test(v) || isNaN(isoToDate(v))) throw bad(`${label} harus berformat YYYY-MM-DD`);
+    return isoToDate(v);
+}
+function hhmm(value, label) {
+    const v = text(value);
+    if (!HHMM.test(v)) throw bad(`${label} harus berformat HH:MM`);
+    return v;
+}
+
+/* ---------- Pesanan ---------- */
+
+function orderOut(r) {
+    return {
+        id: r.id, customer: r.customer, phone: r.phone,
+        items: Array.isArray(r.items) ? r.items : [],
+        summary: r.summary, channel: r.channel, channelInfo: r.channelInfo,
+        time: jamMenit(r.createdAt), date: tanggalPendek(r.createdAt),
+        total: rupiah(r.total), subtotal: rupiah(r.subtotal), discount: rupiah(r.discount),
+        status: r.status, payment: r.payment, paymentStatus: r.paymentStatus, note: r.note,
+        timeline: Array.isArray(r.timeline) ? r.timeline : []
+    };
+}
+
+/** Persen dari promo "Diskon Persen" bernilai "20%"; promo lain tidak memotong harga otomatis. */
+function promoPercent(type, value) {
+    if (type !== "Diskon Persen") return 0;
+    const m = /(\d+(?:[.,]\d+)?)\s*%/.exec(value || "");
+    return m ? Math.min(100, Number(m[1].replace(",", "."))) : 0;
+}
+
+app.get("/api/orders", async (req, res) => {
+    const rows = await prisma.order.findMany({ orderBy: { createdAt: "desc" } });
+    res.json(rows.map(orderOut));
+});
+
+/**
+ * Pesanan baru dari landing page atau admin.
+ * Body: { customer, phone, channel, channelInfo?, payment?, note?, promoId?, items: [{ menuId, qty }] }
+ * Harga dihitung ulang dari tabel menu & promo di database, bukan dipercaya dari browser.
+ */
+app.post("/api/orders", async (req, res) => {
+    const b = req.body || {};
+    const customer = limit(text(b.customer), 120, "Nama pelanggan");
+    if (customer.length < 2) throw bad("Nama pelanggan wajib diisi");
+    const phone = limit(text(b.phone), 30, "Nomor telepon");
+    const channel = text(b.channel) || "Makan di Tempat";
+    if (!ORDER_CHANNELS.includes(channel)) throw bad("Kanal pesanan tidak valid");
+
+    const merged = new Map();
+    for (const it of Array.isArray(b.items) ? b.items : []) {
+        const menuId = text(it && it.menuId);
+        const qty = Number(it && it.qty);
+        if (!menuId) continue;
+        if (!Number.isInteger(qty) || qty < 1) throw bad("Jumlah menu harus bilangan bulat minimal 1");
+        merged.set(menuId, (merged.get(menuId) || 0) + qty);
+    }
+    if (merged.size === 0) throw bad("Pilih minimal satu menu");
+
+    const menus = await prisma.menuItem.findMany({ where: { id: { in: [...merged.keys()] } } });
+    const items = [];
+    let subtotal = 0;
+    for (const [menuId, qty] of merged) {
+        const m = menus.find((x) => x.id === menuId);
+        if (!m) throw bad("Ada menu yang sudah tidak tersedia. Muat ulang halaman.");
+        if (!m.available) throw bad(`${m.name} sedang tidak tersedia`);
+        if (qty > MAX_ORDER_QTY) throw bad(`Maksimal ${MAX_ORDER_QTY} porsi per menu`);
+        if (qty > m.stock) throw bad(`Stok ${m.name} tinggal ${m.stock}`);
+        items.push([m.name, qty, rupiah(m.price)]);
+        subtotal += m.price * qty;
+    }
+
+    let promo = null;
+    const promoId = text(b.promoId);
+    if (promoId) {
+        const p = await prisma.promo.findUnique({ where: { id: promoId } });
+        const today = todayIso();
+        if (p && p.active && p.website && dateToIso(p.startDate) <= today && dateToIso(p.endDate) >= today) promo = p;
+    }
+    const discount = promo ? Math.floor((subtotal * promoPercent(promo.type, promo.value)) / 100) : 0;
+    const note = [limit(text(b.note), 500, "Catatan"), promo ? `Promo: ${promo.name}` : ""].filter(Boolean).join(" · ");
+    const now = new Date();
+
+    const created = await createWithMonthlyId("order", "LB", {
+        customer, phone, channel,
+        channelInfo: limit(text(b.channelInfo), 160, "Info kanal") || "-",
+        items,
+        summary: items.map(([n, q]) => `${n} ×${q}`).join(", "),
+        subtotal, discount, total: subtotal - discount,
+        status: "Baru",
+        payment: limit(text(b.payment), 40, "Metode bayar") || "Bayar di kasir",
+        paymentStatus: "BELUM BAYAR",
+        note: note || "Tidak ada catatan.",
+        timeline: [[jamMenit(now), "Pesanan diterima"]],
+        createdAt: now
+    });
+    res.status(201).json(orderOut(created));
+});
+
+/**
+ * Ubah status pesanan dari admin.
+ * Body: { status?, paymentStatus?, timeline?: "Pesanan diproses" } -> timeline ditambah [jam sekarang, teks].
+ */
+async function updateOrder(req, res) {
+    const current = await prisma.order.findUnique({ where: { id: req.params.id } });
+    if (!current) throw notFound("Pesanan tidak ditemukan");
+    const b = req.body || {};
+    const data = {};
+    if (b.status !== undefined) {
+        if (!ORDER_STATUSES.includes(b.status)) throw bad("Status pesanan tidak valid");
+        data.status = b.status;
+    }
+    if (b.paymentStatus !== undefined) data.paymentStatus = limit(text(b.paymentStatus), 30, "Status bayar");
+    const label = limit(text(b.timeline), 80, "Keterangan");
+    if (label) data.timeline = [...(Array.isArray(current.timeline) ? current.timeline : []), [jamMenit(new Date()), label]];
+    const updated = await prisma.order.update({ where: { id: current.id }, data });
+    res.json(orderOut(updated));
+}
+app.patch("/api/orders/:id", updateOrder);
+// Rute lama, tetap ada supaya tidak memutus kode lain.
+app.patch("/api/orders/:id/status", updateOrder);
+
+app.get("/api/order-summary", async (req, res) => {
+    const groups = await prisma.order.groupBy({ by: ["status"], _count: { _all: true } });
+    const count = (status) => groups.find((g) => g.status === status)?._count._all || 0;
+    res.json({
+        baru: count("Baru"), diproses: count("Diproses"), siap: count("Siap"),
+        selesai: count("Selesai"), dibatalkan: count("Dibatalkan")
+    });
+});
+
+/* ---------- Reservasi ---------- */
+
+function reservationOut(r) {
+    return {
+        id: r.id, customer: r.customer, phone: r.phone, date: dateToIso(r.date), time: r.time,
+        pax: r.pax, table: r.tableName, area: r.area, source: r.source, status: r.status,
+        occasion: r.occasion, note: r.note, createdAt: stempelWaktu(r.createdAt)
+    };
+}
+
+function validateReservation(b) {
+    const customer = limit(text(b.customer), 120, "Nama pemesan");
+    if (customer.length < 2) throw bad("Nama pemesan wajib diisi");
+    const pax = toInt(b.pax, 0);
+    if (!Number.isInteger(pax) || pax < 1 || pax > 500) throw bad("Jumlah tamu harus 1 sampai 500");
+    const status = text(b.status) || "Menunggu";
+    if (!RESERVATION_STATUSES.includes(status)) throw bad("Status reservasi tidak valid");
+    return {
+        customer,
+        phone: limit(text(b.phone), 30, "Nomor telepon"),
+        date: isoDate(b.date, "Tanggal reservasi"),
+        time: hhmm(b.time, "Jam reservasi"),
+        pax,
+        tableName: limit(text(b.table), 60, "Meja") || "Belum ditentukan",
+        area: limit(text(b.area), 60, "Area"),
+        source: limit(text(b.source), 30, "Sumber") || "Website",
+        status,
+        occasion: limit(text(b.occasion), 120, "Keperluan") || "Makan",
+        note: text(b.note) || "Tidak ada catatan khusus."
+    };
+}
+
+app.get("/api/reservations", async (req, res) => {
+    const rows = await prisma.reservation.findMany({ orderBy: [{ date: "desc" }, { time: "desc" }] });
+    res.json(rows.map(reservationOut));
+});
+
+app.post("/api/reservations", async (req, res) => {
+    const v = validateReservation(req.body || {});
+    const created = await createWithMonthlyId("reservation", "RS", v);
+    res.status(201).json(reservationOut(created));
+});
+
+async function updateReservation(req, res) {
+    const current = await prisma.reservation.findUnique({ where: { id: req.params.id } });
+    if (!current) throw notFound("Reservasi tidak ditemukan");
+    const v = validateReservation({ ...reservationOut(current), ...(req.body || {}) });
+    const updated = await prisma.reservation.update({ where: { id: current.id }, data: v });
+    res.json(reservationOut(updated));
+}
+app.put("/api/reservations/:id", updateReservation);
+app.patch("/api/reservations/:id", updateReservation);
+
+app.delete("/api/reservations/:id", async (req, res) => {
+    const { count } = await prisma.reservation.deleteMany({ where: { id: req.params.id } });
+    if (!count) throw notFound("Reservasi tidak ditemukan");
+    res.json({ message: "Reservasi dihapus" });
+});
+
+/* ---------- Katering ---------- */
+
+function cateringOut(r) {
+    return {
+        id: r.id, customer: r.customer, pic: r.pic, phone: r.phone, date: dateToIso(r.date), time: r.time,
+        pax: r.pax, event: r.event, service: r.service, package: r.packageName, address: r.address,
+        total: r.total, dp: r.dp, source: r.source, status: r.status, note: r.note,
+        createdAt: stempelWaktu(r.createdAt)
+    };
+}
+
+function validateCatering(b) {
+    const customer = limit(text(b.customer), 120, "Nama pemesan");
+    if (customer.length < 2) throw bad("Nama pemesan atau instansi wajib diisi");
+    const pax = toInt(b.pax, 0);
+    if (!Number.isInteger(pax) || pax < 1 || pax > 5000) throw bad("Jumlah pax harus 1 sampai 5000");
+    const total = toInt(b.total, 0);
+    const dp = toInt(b.dp, 0);
+    if (!Number.isInteger(total) || total < 0) throw bad("Total harus bilangan bulat 0 atau lebih");
+    if (!Number.isInteger(dp) || dp < 0) throw bad("DP harus bilangan bulat 0 atau lebih");
+    const status = text(b.status) || "Menunggu";
+    if (!CATERING_STATUSES.includes(status)) throw bad("Status katering tidak valid");
+    return {
+        customer,
+        pic: limit(text(b.pic), 120, "Nama PIC") || customer,
+        phone: limit(text(b.phone), 30, "Nomor telepon"),
+        date: isoDate(b.date, "Tanggal acara"),
+        time: hhmm(b.time, "Jam antar"),
+        pax,
+        event: limit(text(b.event), 80, "Jenis acara"),
+        service: limit(text(b.service), 40, "Layanan"),
+        packageName: limit(text(b.package), 160, "Paket"),
+        address: text(b.address),
+        total, dp,
+        source: limit(text(b.source), 30, "Sumber") || "Website",
+        status,
+        note: text(b.note) || "Tidak ada catatan."
+    };
+}
+
+app.get("/api/catering", async (req, res) => {
+    const rows = await prisma.catering.findMany({ orderBy: [{ date: "desc" }, { time: "desc" }] });
+    res.json(rows.map(cateringOut));
+});
+
+app.post("/api/catering", async (req, res) => {
+    const v = validateCatering(req.body || {});
+    const created = await createWithMonthlyId("catering", "KT", v);
+    res.status(201).json(cateringOut(created));
+});
+
+async function updateCatering(req, res) {
+    const current = await prisma.catering.findUnique({ where: { id: req.params.id } });
+    if (!current) throw notFound("Pesanan katering tidak ditemukan");
+    const v = validateCatering({ ...cateringOut(current), ...(req.body || {}) });
+    const updated = await prisma.catering.update({ where: { id: current.id }, data: v });
+    res.json(cateringOut(updated));
+}
+app.put("/api/catering/:id", updateCatering);
+app.patch("/api/catering/:id", updateCatering);
+
+app.delete("/api/catering/:id", async (req, res) => {
+    const { count } = await prisma.catering.deleteMany({ where: { id: req.params.id } });
+    if (!count) throw notFound("Pesanan katering tidak ditemukan");
+    res.json({ message: "Pesanan katering dihapus" });
+});
+
+/* ---------- Laporan ---------- */
 
 function toDateString(date) {
     const y = date.getFullYear();
@@ -436,36 +741,12 @@ function resolveRange(query) {
     return { period, from: toDateString(from), to: toDateString(to) };
 }
 
-app.get("/api/orders", async (req, res) => {
-    const rows = await prisma.order.findMany({ orderBy: { id: "desc" } });
-    res.json(rows.map(orderOut));
-});
-
-app.patch("/api/orders/:id/status", async (req, res) => {
-    const status = req.body && req.body.status;
-    if (!ORDER_STATUSES.includes(status)) throw bad("Status pesanan tidak valid");
-    const id = Number(req.params.id);
-    if (!Number.isInteger(id)) throw notFound("Pesanan tidak ditemukan");
-    const { count } = await prisma.order.updateMany({ where: { id }, data: { status } });
-    if (!count) throw notFound("Pesanan tidak ditemukan");
-    res.json({ message: "Status pesanan diperbarui" });
-});
-
-app.get("/api/order-summary", async (req, res) => {
-    const groups = await prisma.order.groupBy({ by: ["status"], _count: { _all: true } });
-    const count = (status) => groups.find((g) => g.status === status)?._count._all || 0;
-    res.json({
-        baru: count("Baru"), diproses: count("Diproses"), siap: count("Siap"),
-        selesai: count("Selesai"), dibatalkan: count("Dibatalkan")
-    });
-});
-
 app.get("/api/reports/chart", async (req, res) => {
     const range = resolveRange(req.query);
     if (!range) throw bad("Rentang tanggal tidak valid");
 
     const channel = req.query.channel && req.query.channel !== "Semua" ? String(req.query.channel) : null;
-    if (channel && !Object.values(CHANNEL_LABEL).includes(channel)) throw bad("Channel pesanan tidak valid");
+    if (channel && !ORDER_CHANNELS.includes(channel)) throw bad("Channel pesanan tidak valid");
     const monthly = range.period === "Tahun ini";
 
     // created_at disimpan sebagai timestamptz (UTC); dikonversi ke zona waktu toko sebelum dikelompokkan.
@@ -473,7 +754,7 @@ app.get("/api/reports/chart", async (req, res) => {
     const bucket = monthly
         ? Prisma.sql`to_char(${localTime}, 'YYYY-MM')`
         : Prisma.sql`to_char(${localTime}::date, 'YYYY-MM-DD')`;
-    const channelClause = channel ? Prisma.sql`AND "channel" = CAST(${channel} AS "order_channel")` : Prisma.empty;
+    const channelClause = channel ? Prisma.sql`AND "channel" = ${channel}` : Prisma.empty;
 
     const rows = await prisma.$queryRaw`
         SELECT ${bucket} AS bucket,

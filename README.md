@@ -8,7 +8,7 @@ cp .env.example .env.local
 npm run dev          # http://localhost:3001
 ```
 
-Backend (wajib untuk Menu, Kategori, Promo, Pengaturan, dan Bantuan) memakai **PostgreSQL + Prisma**.
+Backend (wajib untuk Menu, Kategori, Promo, Pengaturan, Bantuan, Pesanan, Reservasi, dan Katering) memakai **PostgreSQL + Prisma**.
 Siapkan dulu server PostgreSQL (instal lokal, Docker, atau gratisan di Supabase/Neon) dan buat database kosong
 `lamak_bana`. Lalu di terminal terpisah:
 
@@ -72,9 +72,28 @@ hanya memisahkan layout. URL tetap `/`, `/security-check`, `/admin-dashboard/...
   Nama class asli jangan diganti.
 - Bootstrap: di admin dimuat biasa. Di landing & login dimuat lewat `src/styles/bootstrap-layer.css`
   + `bootstrap-compat.css` supaya tampilan identik dengan versi HTML. Jangan edit dua file itu.
-- Data Menu, Kategori, dan Promo lewat `useApiList("/api/...")`, Pengaturan lewat `useSettings()`; keduanya
-  membaca/menulis ke backend (PostgreSQL) sehingga admin dan landing sinkron. Pesanan, Reservasi, dan Katering masih
-  memakai `useLocalStorage(STORAGE_KEYS.xxx, DATA_DEFAULT)` sampai bagian itu dipindah ke backend.
+- Semua data lewat backend (PostgreSQL) sehingga admin dan landing sinkron di perangkat mana pun:
+  Menu, Kategori, Promo, Pesanan, Reservasi, Katering lewat `useApiList("/api/...")`, Pengaturan lewat `useSettings()`.
+  Jangan simpan data bisnis di localStorage: isinya hanya ada di browser itu sendiri, jadi pesanan dari HP
+  pelanggan tidak akan pernah terlihat di laptop admin. localStorage sekarang hanya untuk status login.
+- Endpoint: `GET/POST /api/orders`, `PATCH /api/orders/:id` (`{ status, paymentStatus, timeline }`),
+  `GET/POST /api/reservations`, `PUT/PATCH/DELETE /api/reservations/:id`, `GET/POST /api/catering`,
+  `PUT/PATCH/DELETE /api/catering/:id`. ID (`#LB-2611-001` dst.) dan harga pesanan dihitung backend.
+  ID berisi `#`, jadi di URL selalu pakai `encodeURIComponent(id)`.
 - Filter pakai `<FilterDropdown>`, panel detail/editor pakai `<Drawer>`, notifikasi pakai `useToast()`, form select pakai `<Select>`.
 - Tombol "Pesanan/Reservasi/Katering Baru" di header membuka halaman dengan `?aksi=baru`; halaman tujuan langsung membuka form tambah.
 - Satu orang satu branch, PR ke `main`.
+
+## Deploy ke Vercel
+
+1. **Backend** (Root Directory `backend`): isi Environment Variable `DATABASE_URL` (PostgreSQL online, mis. Neon/Supabase)
+   dan `APP_TIMEZONE=Asia/Jakarta`. Server Vercel berjalan di UTC; jam pesanan dihitung dengan `APP_TIMEZONE`.
+2. **Migrasi database produksi** (setiap ada folder baru di `backend/prisma/migrations`), dari komputer sendiri:
+   ```bash
+   cd backend
+   DATABASE_URL="<url database produksi>" npm run db:deploy
+   ```
+   Tanpa langkah ini tabel `orders`, `reservations`, `catering` tidak ada dan pesanan gagal disimpan (error 500).
+3. **Frontend** (Root Directory repo): isi `NEXT_PUBLIC_API_URL` dengan URL backend di Vercel
+   (mis. `https://lamak-bana-api.vercel.app`, tanpa `/` di akhir), lalu **Redeploy**. Variabel `NEXT_PUBLIC_*`
+   ditanam saat build, jadi mengubahnya tanpa redeploy tidak berpengaruh.

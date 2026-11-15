@@ -1,6 +1,7 @@
 /**
- * Key localStorage. JANGAN diganti namanya: landing page dan admin
- * saling membaca key yang sama supaya datanya sinkron.
+ * Key localStorage. Sekarang hanya `auth` yang benar-benar dipakai; data pesanan, reservasi,
+ * katering, menu, dll. sudah di database (localStorage itu per-browser, jadi pesanan dari HP
+ * pelanggan tidak akan pernah terlihat di browser admin).
  */
 export const STORAGE_KEYS = {
   auth: "lamak-bana-admin-auth",

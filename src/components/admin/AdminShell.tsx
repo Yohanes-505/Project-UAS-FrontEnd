@@ -1,11 +1,9 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { ToastProvider } from "@/components/ui/Toast";
-import { CATERING_DATA_DEFAULT, ORDER_DATA_DEFAULT, RESERVATION_DATA_DEFAULT } from "@/data";
 import { LOGIN_PATH, logout } from "@/lib/auth";
-import { seedStorage, STORAGE_KEYS } from "@/lib/storage";
 import { AuthGuard } from "./AuthGuard";
 import { Header } from "./Header";
 import { LogoutConfirm } from "./LogoutConfirm";
@@ -21,13 +19,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
   const [notifOpen, setNotifOpen] = useState(false);
   const [logoutOpen, setLogoutOpen] = useState(false);
 
-  // Pesanan, reservasi, dan katering masih memakai localStorage (belum pindah ke backend).
-  // Menu, kategori, promo, dan pengaturan sudah di database; data awalnya diisi backend.
-  useEffect(() => {
-    seedStorage(STORAGE_KEYS.orders, ORDER_DATA_DEFAULT);
-    seedStorage(STORAGE_KEYS.reservations, RESERVATION_DATA_DEFAULT);
-    seedStorage(STORAGE_KEYS.catering, CATERING_DATA_DEFAULT);
-  }, []);
+  // Semua data (menu, kategori, promo, pengaturan, pesanan, reservasi, katering) ada di database.
 
   const handleLogout = () => {
     logout();

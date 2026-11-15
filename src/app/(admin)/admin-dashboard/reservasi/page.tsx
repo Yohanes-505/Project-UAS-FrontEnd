@@ -16,29 +16,30 @@ import {
 import { Button } from "@/components/ui/Button";
 import { FilterDropdown } from "@/components/ui/FilterDropdown";
 import { useToast } from "@/components/ui/Toast";
-import { DROPDOWN_OPTIONS, RESERVATION_DATA_DEFAULT } from "@/data";
-import { useLocalStorage } from "@/hooks/useLocalStorage";
+import { DROPDOWN_OPTIONS } from "@/data";
+import { useApiList } from "@/hooks/useApiList";
 import { useSettings } from "@/hooks/useSettings";
 import { QUICK_ACTION_NEW, QUICK_ACTION_PARAM } from "@/lib/admin-nav";
-import { DEMO_TODAY } from "@/lib/booking";
+import { apiSend, errorMessage, notifyApiChange } from "@/lib/api";
+import { bookingToday } from "@/lib/booking";
 import {
   filterReservations,
-  nextReservationId,
   RESERVATION_FILTERS_DEFAULT,
   RESERVATION_NEXT,
   RESERVATION_TABS,
   reservationsBase,
   type ReservationFilters,
 } from "@/lib/reservations";
-import { seedStorage, STORAGE_KEYS, writeStorage } from "@/lib/storage";
 import type { Reservation } from "@/types";
 
+const PATH = "/api/reservations";
+
 /** reservasi kosong untuk form reservasi baru*/
-const BLANK: Reservation = {
+const blank = (): Reservation => ({
   id: "",
   customer: "",
   phone: "",
-  date: DEMO_TODAY,
+  date: bookingToday(),
   time: "12:00",
   pax: 2,
   table: "",
@@ -48,7 +49,7 @@ const BLANK: Reservation = {
   occasion: "",
   note: "",
   createdAt: "",
-};
+});
 
 function ReservasiContent() {
   const showToast = useToast();
@@ -57,52 +58,56 @@ function ReservasiContent() {
   const params = useSearchParams();
   const [settings] = useSettings();
 
-  const [stored, , ready] = useLocalStorage<Reservation[]>(STORAGE_KEYS.reservations, RESERVATION_DATA_DEFAULT);
-  const reservations = Array.isArray(stored) ? stored : RESERVATION_DATA_DEFAULT;
+  // Data dari database, jadi permintaan dari landing page (HP pelanggan) langsung terlihat di sini.
+  const { items: reservations, ready, error: loadError, reload } = useApiList<Reservation>(PATH);
 
   const [filters, setFilters] = useState<ReservationFilters>(RESERVATION_FILTERS_DEFAULT);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editing, setEditing] = useState<Reservation | null>(null);
 
-  useEffect(() => { if (ready) seedStorage(STORAGE_KEYS.reservations, RESERVATION_DATA_DEFAULT); }, [ready]);
+  // Ambil ulang tiap 20 detik supaya data baru dari website muncul tanpa refresh.
+  useEffect(() => {
+    const timer = window.setInterval(reload, 20000);
+    return () => window.clearInterval(timer);
+  }, [reload]);
 
   const handledQuick = useRef(false);
   useEffect(() => {
     if (handledQuick.current || params.get(QUICK_ACTION_PARAM) !== QUICK_ACTION_NEW) return;
     handledQuick.current = true;
-    setEditing(BLANK);
+    setEditing(blank());
     router.replace(pathname);
   }, [params, pathname, router]);
 
   const patchFilters = (patch: Partial<ReservationFilters>) => setFilters((f) => ({ ...f, ...patch }));
 
-  /** simpen ke localStorage kalo gagal ksh tau admin dan data lama tetap utuh */
-  const persist = (next: Reservation[]): boolean => {
-    if (writeStorage(STORAGE_KEYS.reservations, next)) return true;
-    showToast("Gagal menyimpan: penyimpanan browser penuh.");
-    return false;
-  };
+  const selected = reservations.find((x) => x.id === selectedId) ?? null;
 
-  const selected = reservations.find((r) => r.id === selectedId) ?? null;
-
-  const handleSave = (payload: ReservationPayload) => {
+  const handleSave = async (payload: ReservationPayload) => {
     if (!editing) return;
-    if (editing.id) {
-      const next = reservations.map((r) => (r.id === editing.id ? { ...r, ...payload } : r));
-      if (!persist(next)) return;
-      showToast(`${editing.id} berhasil diperbarui.`);
-    } else {
-      const id = nextReservationId(reservations);
-      const next = [...reservations, { ...payload, id, createdAt: "28 Sep 2026 · sekarang" }];
-      if (!persist(next)) return;
-      showToast(`${id} berhasil dibuat.`);
+    try {
+      if (editing.id) {
+        await apiSend<Reservation>("PUT", `${PATH}/${encodeURIComponent(editing.id)}`, payload);
+        showToast(`${editing.id} berhasil diperbarui.`);
+      } else {
+        const saved = await apiSend<Reservation>("POST", PATH, payload);
+        showToast(`${saved.id} berhasil dibuat.`);
+      }
+      notifyApiChange(PATH);
+      setEditing(null);
+    } catch (err) {
+      showToast(errorMessage(err, "Gagal menyimpan reservasi."));
     }
-    setEditing(null);
   };
 
-  const setStatus = (r: Reservation, status: Reservation["status"], message: string) => {
-    const next = reservations.map((item) => (item.id === r.id ? { ...item, status } : item));
-    if (persist(next)) showToast(message);
+  const setStatus = async (item: Reservation, status: Reservation["status"], message: string) => {
+    try {
+      await apiSend<Reservation>("PATCH", `${PATH}/${encodeURIComponent(item.id)}`, { status });
+      notifyApiChange(PATH);
+      showToast(message);
+    } catch (err) {
+      showToast(errorMessage(err, "Gagal memperbarui status."));
+    }
   };
 
   const advance = (r: Reservation) => {
@@ -123,11 +128,17 @@ function ReservasiContent() {
         badge={<WebsiteSyncPill />}
         subtitle="Pantau booking meja, konfirmasi kedatangan, dan catat reservasi dari website maupun admin."
         actions={
-          <Button id="btn-add-reservation" variant="pill" icon="calendar-plus" onClick={() => setEditing(BLANK)}>
+          <Button id="btn-add-reservation" variant="pill" icon="calendar-plus" onClick={() => setEditing(blank())}>
             Reservasi Baru
           </Button>
         }
       />
+
+      {loadError && (
+        <p className="u-text-sm" role="alert" style={{ color: "#b42318" }}>
+          {loadError}
+        </p>
+      )}
 
       <ReservationStats
         reservations={reservations}
@@ -175,7 +186,7 @@ function ReservasiContent() {
 
         <div className="d-flex flex-wrap align-items-center justify-content-between u-gap-3 u-pt-1">
           <p id="reservation-count" className="u-text-xs ink60">
-            Menampilkan {visible.length} dari {reservations.length} reservasi
+            {ready ? `Menampilkan ${visible.length} dari ${reservations.length} reservasi` : "Memuat reservasi…"}
           </p>
           <span className="table-footer-note">Gunakan filter untuk mempersempit data</span>
         </div>

@@ -6,16 +6,15 @@ import { FinancePanel } from "@/components/admin/dashboard/FinancePanel";
 import { OpsQueue, type OpsMetric } from "@/components/admin/dashboard/OpsQueue";
 import { RecentOrders } from "@/components/admin/dashboard/RecentOrders";
 import { SideRail, type PriorityRow } from "@/components/admin/dashboard/SideRail";
-import { AGENDA_NEXT, ATTENTION_WARNINGS, ORDER_DATA_DEFAULT } from "@/data";
-import { useLocalStorage, useNow } from "@/hooks";
+import { AGENDA_NEXT, ATTENTION_WARNINGS } from "@/data";
+import { useNow } from "@/hooks";
+import { useApiList } from "@/hooks/useApiList";
 import { countByStatus, countLateOrders, dashboardDateLabel, ordersHref } from "@/lib/orders";
-import { STORAGE_KEYS } from "@/lib/storage";
 import type { Order } from "@/types";
 
 export default function DashboardPage() {
   const router = useRouter();
-  const [stored] = useLocalStorage<Order[]>(STORAGE_KEYS.orders, ORDER_DATA_DEFAULT);
-  const orders = Array.isArray(stored) ? stored : ORDER_DATA_DEFAULT;
+  const { items: orders } = useApiList<Order>("/api/orders");
   const now = useNow(60000);
   const late = now === null ? 0 : countLateOrders(orders, now);
 

@@ -11,7 +11,10 @@ import { rupiah } from "@/lib/format";
 import { ORDER_CHANNELS, ORDER_PAYMENTS } from "@/lib/orders";
 import type { MenuItem, Order, OrderItem } from "@/types";
 
-export type OrderPayload = Pick<Order, "customer" | "phone" | "channel" | "channelInfo" | "payment" | "note" | "items">;
+export type OrderPayload = Pick<Order, "customer" | "phone" | "channel" | "channelInfo" | "payment" | "note" | "items"> & {
+  /** menu yang dipilih (dikirim ke backend; harga dihitung ulang dari database) */
+  lines: { menuId: string; qty: number }[];
+};
 
 interface Row { menuId: string; qty: string }
 export function OrderEditor({ menu, onClose, onSave }: { menu: MenuItem[]; onClose: () => void; onSave: (p: OrderPayload) => void }) {
@@ -53,6 +56,7 @@ export function OrderEditor({ menu, onClose, onSave }: { menu: MenuItem[]; onClo
       payment,
       note: note.trim() || "Tidak ada catatan khusus.",
       items,
+      lines: [...merged].map(([menuId, qty]) => ({ menuId, qty })),
     });
   };
 

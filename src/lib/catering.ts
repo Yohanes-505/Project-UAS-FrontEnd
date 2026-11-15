@@ -1,5 +1,5 @@
 import { isoShift } from "@/lib/format";
-import { byDateTime, DEMO_TODAY, idNumber, textMatches } from "@/lib/booking";
+import { byDateTime, bookingToday, idNumber, textMatches } from "@/lib/booking";
 import type { Catering, CateringStatus } from "@/types";
 
 export const CATERING_TABS: Array<"Semua" | CateringStatus> = [
@@ -43,7 +43,8 @@ export const CATERING_FILTERS_DEFAULT: CateringFilters = {
   search: "",
   status: "Semua",
   service: "Semua",
-  date: "7 hari",
+  // "Semua Tanggal" supaya permintaan baru dari website (acaranya bisa minggu depan) langsung terlihat.
+  date: "Semua Tanggal",
 };
 
 /** 1400000 -> "Rp1.400.000"; compact: "Rp1,4 jt" / "Rp700 rb". */
@@ -57,9 +58,9 @@ export function cateringRupiah(value: number, compact = false): string {
 }
 
 function matchesDate(c: Catering, filter: string): boolean {
-  if (filter === "Hari ini") return c.date === DEMO_TODAY;
-  if (filter === "7 hari") return c.date >= DEMO_TODAY && c.date <= isoShift(DEMO_TODAY, 6);
-  if (filter === "Bulan ini") return c.date.slice(0, 7) === DEMO_TODAY.slice(0, 7);
+  if (filter === "Hari ini") return c.date === bookingToday();
+  if (filter === "7 hari") return c.date >= bookingToday() && c.date <= isoShift(bookingToday(), 6);
+  if (filter === "Bulan ini") return c.date.slice(0, 7) === bookingToday().slice(0, 7);
   return true; // "Semua Tanggal"
 }
 
@@ -87,13 +88,13 @@ export function activeCatering(list: Catering[]): Catering[] {
 /** Pesanan aktif yang tanggalnya hari ini atau sesudahnya, urut jadwal. */
 export function upcomingCatering(list: Catering[]): Catering[] {
   return activeCatering(list)
-    .filter((c) => c.date >= DEMO_TODAY)
+    .filter((c) => c.date >= bookingToday())
     .sort(byDateTime);
 }
 
 export function cateringStats(list: Catering[]) {
   const upcoming = upcomingCatering(list);
-  const week = upcoming.filter((c) => c.date <= isoShift(DEMO_TODAY, 6));
+  const week = upcoming.filter((c) => c.date <= isoShift(bookingToday(), 6));
   return {
     upcoming: upcoming.length,
     pending: upcoming.filter((c) => c.status === "Menunggu" || c.status === "Penawaran").length,

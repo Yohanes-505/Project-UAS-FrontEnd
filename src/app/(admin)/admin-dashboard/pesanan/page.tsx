@@ -5,15 +5,14 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { AdminPage, PageHeading } from "@/components/admin/AdminPage";
 import { BookingTabs, BookingToolbar } from "@/components/admin/booking";
 import { OrderDetail, OrderEditor, OrderRow, OrderStats, type OrderPayload } from "@/components/admin/order";
-import { jamMenit, nextId, tanggalPendek } from "@/components/landing/lib";
 import { Button } from "@/components/ui/Button";
 import { FilterDropdown } from "@/components/ui/FilterDropdown";
 import { Icon } from "@/components/ui/Icon";
 import { useToast } from "@/components/ui/Toast";
-import { DROPDOWN_OPTIONS, MENU_DATA_DEFAULT, ORDER_DATA_DEFAULT } from "@/data";
-import { useLocalStorage } from "@/hooks/useLocalStorage";
+import { DROPDOWN_OPTIONS } from "@/data";
+import { useApiList } from "@/hooks/useApiList";
 import { QUICK_ACTION_NEW, QUICK_ACTION_PARAM } from "@/lib/admin-nav";
-import { rupiah, rupiahNumber } from "@/lib/format";
+import { apiSend, errorMessage, notifyApiChange } from "@/lib/api";
 import {
   filterOrders,
   ORDER_FILTERS_DEFAULT,
@@ -23,8 +22,9 @@ import {
   ordersBase,
   type OrderFilters,
 } from "@/lib/orders";
-import { seedStorage, STORAGE_KEYS, writeStorage } from "@/lib/storage";
 import type { MenuItem, Order, OrderStatus } from "@/types";
+
+const PATH = "/api/orders";
 
 function PesananContent() {
   const showToast = useToast();
@@ -32,10 +32,9 @@ function PesananContent() {
   const pathname = usePathname();
   const params = useSearchParams();
 
-  const [stored, , ready] = useLocalStorage<Order[]>(STORAGE_KEYS.orders, ORDER_DATA_DEFAULT);
-  const orders = Array.isArray(stored) ? stored : ORDER_DATA_DEFAULT;
-  const [storedMenu] = useLocalStorage<MenuItem[]>(STORAGE_KEYS.menu, MENU_DATA_DEFAULT);
-  const menu = Array.isArray(storedMenu) ? storedMenu : MENU_DATA_DEFAULT;
+  // Pesanan & menu dari database, jadi pesanan dari landing page (HP pelanggan) langsung terlihat di sini.
+  const { items: orders, ready, error: loadError, reload } = useApiList<Order>(PATH);
+  const { items: menu } = useApiList<MenuItem>("/api/menu");
   const initialStatus = params.get(ORDER_STATUS_PARAM);
   const [filters, setFilters] = useState<OrderFilters>(() => ({
     ...ORDER_FILTERS_DEFAULT,
@@ -44,7 +43,11 @@ function PesananContent() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
 
-  useEffect(() => { if (ready) seedStorage(STORAGE_KEYS.orders, ORDER_DATA_DEFAULT); }, [ready]);
+  // Ambil ulang tiap 20 detik supaya pesanan baru dari website muncul tanpa refresh.
+  useEffect(() => {
+    const timer = window.setInterval(reload, 20000);
+    return () => window.clearInterval(timer);
+  }, [reload]);
 
   const handledQuick = useRef(false);
   useEffect(() => {
@@ -56,44 +59,36 @@ function PesananContent() {
 
   const patchFilters = (patch: Partial<OrderFilters>) => setFilters((f) => ({ ...f, ...patch }));
 
-  const persist = (next: Order[]): boolean => {
-    if (writeStorage(STORAGE_KEYS.orders, next)) return true;
-    showToast("Gagal menyimpan: penyimpanan browser penuh.");
-    return false;
-  };
-
   const selected = orders.find((o) => o.id === selectedId) ?? null;
 
-  const handleCreate = (p: OrderPayload) => {
-    const now = new Date();
-    const id = nextId(orders.map((o) => o.id), "LB", now);
-    const subtotal = p.items.reduce((sum, it) => sum + it[1] * rupiahNumber(it[2]), 0);
-    const time = jamMenit(now);
-    const order: Order = {
-      ...p,
-      id,
-      summary: p.items.map(([n, q]) => `${n} ×${q}`).join(", "),
-      time,
-      date: tanggalPendek(now),
-      subtotal: rupiah(subtotal),
-      discount: "Rp0",
-      total: rupiah(subtotal),
-      status: "Baru",
-      paymentStatus: "BELUM DIBAYAR",
-      timeline: [[time, "Pesanan diterima"]],
-    };
-    if (!persist([order, ...orders])) return;
-    showToast(`${id} berhasil dibuat.`);
-    setCreating(false);
-    setFilters((f) => ({ ...f, status: "Semua", date: "Hari ini", search: "" }));
+  const handleCreate = async (p: OrderPayload) => {
+    try {
+      const order = await apiSend<Order>("POST", PATH, {
+        customer: p.customer,
+        phone: p.phone,
+        channel: p.channel,
+        channelInfo: p.channelInfo,
+        payment: p.payment,
+        note: p.note,
+        items: p.lines,
+      });
+      notifyApiChange(PATH);
+      showToast(`${order.id} berhasil dibuat.`);
+      setCreating(false);
+      setFilters((f) => ({ ...f, status: "Semua", date: "Hari ini", search: "" }));
+    } catch (err) {
+      showToast(errorMessage(err, "Gagal membuat pesanan."));
+    }
   };
 
-  const update = (o: Order, patch: Partial<Order>, label: string, message: string) => {
-    const time = jamMenit(new Date());
-    const next = orders.map((item) =>
-      item.id === o.id ? { ...item, ...patch, timeline: [...item.timeline, [time, label] as [string, string]] } : item,
-    );
-    if (persist(next)) showToast(message);
+  const update = async (o: Order, patch: Partial<Pick<Order, "status" | "paymentStatus">>, label: string, message: string) => {
+    try {
+      await apiSend<Order>("PATCH", `${PATH}/${encodeURIComponent(o.id)}`, { ...patch, timeline: label });
+      notifyApiChange(PATH);
+      showToast(message);
+    } catch (err) {
+      showToast(errorMessage(err, "Gagal memperbarui pesanan."));
+    }
   };
 
   const advance = (o: Order) => {
@@ -116,6 +111,12 @@ function PesananContent() {
         subtitle="Pantau, proses, dan selesaikan seluruh pesanan dari satu halaman."
         actions={<Button id="btn-new-order" variant="pill" icon="plus" onClick={() => setCreating(true)}>Pesanan Baru</Button>}
       />
+
+      {loadError && (
+        <p className="u-text-sm" role="alert" style={{ color: "#b42318" }}>
+          {loadError}
+        </p>
+      )}
 
       <OrderStats orders={orders} onPickStatus={(status) => patchFilters({ status, date: "Hari ini", channel: "Semua", search: "" })} />
 
@@ -152,7 +153,7 @@ function PesananContent() {
 
         <div className="d-flex w-100 flex-wrap align-items-center justify-content-between u-gap-3">
           <p id="orders-count" className="u-text-xs u-leading-4 ink60">
-            Menampilkan {visible.length} dari {orders.length} pesanan
+            {ready ? `Menampilkan ${visible.length} dari ${orders.length} pesanan` : "Memuat pesanan…"}
           </p>
           <span className="table-footer-note">Gunakan filter untuk mempersempit data</span>
         </div>

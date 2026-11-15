@@ -1,14 +1,12 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { RESERVATION_DATA_DEFAULT } from "@/data/reservations";
-import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { useSettings } from "@/hooks/useSettings";
+import { apiSend, errorMessage, notifyApiChange } from "@/lib/api";
 import { todayISO } from "@/lib/format";
-import { STORAGE_KEYS } from "@/lib/storage";
 import type { Reservation } from "@/types";
 import { RESERVATION_AREAS } from "./content";
-import { hoursFor, isValidPhone, isWeekendISO, jamTitik, nextId, reservationTimeError, stempelWaktu } from "./lib";
+import { hoursFor, isValidPhone, isWeekendISO, jamTitik, reservationTimeError } from "./lib";
 import { LandingModal, ModalHead } from "./LandingModal";
 
 /** Modal reservasi meja. Masuk ke halaman Reservasi admin dengan status "Menunggu" dan sumber "Website". */
@@ -21,7 +19,6 @@ export function ReservationModal({ open, onClose }: { open: boolean; onClose: ()
 }
 
 function ReservationForm({ onClose }: { onClose: () => void }) {
-  const [list, setList] = useLocalStorage(STORAGE_KEYS.reservations, RESERVATION_DATA_DEFAULT);
   const [settings] = useSettings();
   const today = todayISO();
 
@@ -34,12 +31,14 @@ function ReservationForm({ onClose }: { onClose: () => void }) {
   const [occasion, setOccasion] = useState("");
   const [note, setNote] = useState("");
   const [error, setError] = useState("");
+  const [sending, setSending] = useState(false);
   const [done, setDone] = useState<{ id: string; text: string } | null>(null);
 
   const h = hoursFor(date ? isWeekendISO(date) : false, settings);
 
-  function submit(e: FormEvent) {
+  async function submit(e: FormEvent) {
     e.preventDefault();
+    if (sending) return;
     if (name.trim().length < 2) return setError("Isi nama pemesan dulu ya.");
     if (!isValidPhone(phone)) return setError("Nomor WhatsApp belum valid. Contoh: 0812-3456-7890.");
     if (!date || date < today) return setError("Pilih tanggal hari ini atau setelahnya.");
@@ -47,9 +46,7 @@ function ReservationForm({ onClose }: { onClose: () => void }) {
     if (timeError) return setError(timeError);
     if (pax < 1 || pax > 20) return setError("Jumlah tamu 1–20 orang. Untuk lebih banyak, gunakan katering.");
 
-    const id = nextId(list.map((r) => r.id), "RS");
-    const record: Reservation = {
-      id,
+    const record: Omit<Reservation, "id" | "createdAt"> = {
       customer: name.trim(),
       phone: phone.trim(),
       date,
@@ -61,10 +58,18 @@ function ReservationForm({ onClose }: { onClose: () => void }) {
       status: "Menunggu",
       occasion: occasion.trim() || "Makan",
       note: note.trim() || "Tidak ada catatan khusus.",
-      createdAt: stempelWaktu(),
     };
-    setList((prev) => [record, ...prev]);
-    setDone({ id, text: `${pax} orang · ${area} · ${date} pukul ${time}` });
+    setError("");
+    setSending(true);
+    try {
+      const saved = await apiSend<Reservation>("POST", "/api/reservations", record);
+      notifyApiChange("/api/reservations");
+      setDone({ id: saved.id, text: `${pax} orang · ${area} · ${date} pukul ${time}` });
+    } catch (err) {
+      setError(errorMessage(err, "Reservasi gagal dikirim. Coba lagi."));
+    } finally {
+      setSending(false);
+    }
   }
 
   if (done) {
@@ -136,8 +141,8 @@ function ReservationForm({ onClose }: { onClose: () => void }) {
           {error}
         </p>
       )}
-      <button type="submit" className="btn-solid-red order-submit">
-        Kirim Reservasi
+      <button type="submit" className="btn-solid-red order-submit" disabled={sending}>
+        {sending ? "Mengirim…" : "Kirim Reservasi"}
       </button>
     </form>
   );

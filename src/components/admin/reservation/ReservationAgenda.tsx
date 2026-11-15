@@ -1,6 +1,6 @@
 import { StatusPill } from "@/components/admin/booking";
 import { RESERVATION_STATUS_STYLE } from "@/data/status-styles";
-import { DEMO_TODAY, formatLongDate } from "@/lib/booking";
+import { bookingToday, formatLongDate } from "@/lib/booking";
 import { todaysReservations } from "@/lib/reservations";
 import type { Reservation } from "@/types";
 
@@ -21,7 +21,7 @@ export function ReservationAgenda({
       <div className="d-flex align-items-center justify-content-between u-gap-3">
         <div>
           <p className="u-text-base fw-semibold u-text-ink">Agenda Hari Ini</p>
-          <p className="u-text-xs ink60">{formatLongDate(DEMO_TODAY)}</p>
+          <p className="u-text-xs ink60">{formatLongDate(bookingToday())}</p>
         </div>
         <span id="reservation-agenda-count" className="reservation-agenda-pill">
           {today.length} booking

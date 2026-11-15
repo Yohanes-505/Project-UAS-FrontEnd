@@ -115,39 +115,83 @@ model HelpTicket {
   @@map("help_tickets")
 }
 
-// ---------- Pesanan (bagian anggota lain; belum dipakai frontend) ----------
-// Nilai enum di database tetap teks Indonesia (lihat @map), API juga mengirim teks itu.
-enum OrderChannel {
-  MakanDiTempat @map("Makan di Tempat")
-  AmbilSendiri  @map("Ambil Sendiri")
-  OjekOnline    @map("Ojek Online")
-  Katering      @map("Katering")
-
-  @@map("order_channel")
-}
-
-enum OrderStatus {
-  Baru
-  Diproses
-  Siap
-  Selesai
-  Dibatalkan
-
-  @@map("order_status")
-}
-
+// ---------- Pesanan ----------
+// Bentuk kolom mengikuti tipe Order di src/types/index.ts supaya landing & admin bisa langsung pakai.
+// ID dibuat backend: "#LB-YYMM-NNN" (nomor urut per bulan, zona waktu APP_TIMEZONE).
+// items    = [[nama, jumlah, "Rp28.000"], ...]
+// timeline = [["12:48", "Pesanan diterima"], ...]
+// subtotal/discount/total disimpan sebagai angka (Rupiah), API mengirimnya sebagai teks "Rp79.000".
 model Order {
-  id        Int          @id @default(autoincrement())
-  code      String?      @unique @db.VarChar(30)
-  customer  String       @db.VarChar(120)
-  phone     String?      @db.VarChar(30)
-  channel   OrderChannel @default(MakanDiTempat)
-  total     Int          @default(0)
-  status    OrderStatus  @default(Baru)
-  createdAt DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  id            String   @id @db.VarChar(30)
+  customer      String   @db.VarChar(120)
+  phone         String   @default("") @db.VarChar(30)
+  items         Json     @default("[]")
+  summary       String   @default("")
+  channel       String   @default("Makan di Tempat") @db.VarChar(40)
+  channelInfo   String   @default("") @map("channel_info") @db.VarChar(160)
+  subtotal      Int      @default(0)
+  discount      Int      @default(0)
+  total         Int      @default(0)
+  status        String   @default("Baru") @db.VarChar(20)
+  payment       String   @default("Bayar di kasir") @db.VarChar(40)
+  paymentStatus String   @default("BELUM BAYAR") @map("payment_status") @db.VarChar(30)
+  note          String   @default("")
+  timeline      Json     @default("[]")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   @@index([createdAt], map: "idx_orders_created")
   @@index([status], map: "idx_orders_status")
   @@index([channel], map: "idx_orders_channel")
   @@map("orders")
+}
+
+// ---------- Reservasi Meja ----------
+// ID: "#RS-YYMM-NNN". Bentuk JSON sama dengan tipe Reservation di frontend.
+model Reservation {
+  id        String   @id @db.VarChar(30)
+  customer  String   @db.VarChar(120)
+  phone     String   @default("") @db.VarChar(30)
+  date      DateTime @db.Date
+  time      String   @db.VarChar(5) // HH:MM
+  pax       Int      @default(1)
+  tableName String   @default("Belum ditentukan") @map("table_name") @db.VarChar(60)
+  area      String   @default("") @db.VarChar(60)
+  source    String   @default("Website") @db.VarChar(30)
+  status    String   @default("Menunggu") @db.VarChar(20)
+  occasion  String   @default("") @db.VarChar(120)
+  note      String   @default("")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@index([date], map: "idx_reservations_date")
+  @@index([status], map: "idx_reservations_status")
+  @@map("reservations")
+}
+
+// ---------- Katering ----------
+// ID: "#KT-YYMM-NNN". Bentuk JSON sama dengan tipe Catering di frontend.
+model Catering {
+  id          String   @id @db.VarChar(30)
+  customer    String   @db.VarChar(120)
+  pic         String   @default("") @db.VarChar(120)
+  phone       String   @default("") @db.VarChar(30)
+  date        DateTime @db.Date
+  time        String   @db.VarChar(5) // HH:MM
+  pax         Int      @default(1)
+  event       String   @default("") @db.VarChar(80)
+  service     String   @default("") @db.VarChar(40)
+  packageName String   @default("") @map("package") @db.VarChar(160)
+  address     String   @default("")
+  total       Int      @default(0)
+  dp          Int      @default(0)
+  source      String   @default("Website") @db.VarChar(30)
+  status      String   @default("Menunggu") @db.VarChar(20)
+  note        String   @default("")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@index([date], map: "idx_catering_date")
+  @@index([status], map: "idx_catering_status")
+  @@map("catering")
 }
