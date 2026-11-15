@@ -11,6 +11,6 @@ export default defineConfig({
   datasource: {
     // Nilai cadangan supaya `prisma generate` (dijalankan otomatis saat npm install)
     // tetap jalan walau .env belum dibuat. Perintah migrate/seed tetap butuh .env yang benar.
-    url: process.env.DATABASE_URL ?? "postgresql://postgres:postgres@localhost:5432/lamak_bana",
+    url: process.env.DIRECT_URL ?? process.env.DATABASE_URL ?? "postgresql://postgres:postgres@localhost:5432/lamak_bana",
   },
 });
