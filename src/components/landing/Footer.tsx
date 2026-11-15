@@ -84,8 +84,14 @@ export function Footer() {
           </div>
         </div>
 
-        <svg className="footer-bg-text" viewBox="0 0 1200 250" aria-hidden="true">
-          <text x="0" y="240" textLength="1200" lengthAdjust="spacingAndGlyphs">
+        <svg className="footer-bg-text" viewBox="0 0 1200 100" aria-hidden="true" focusable="false">
+          <text
+            x="0"
+            y="-26"
+            dominantBaseline="hanging"
+            textLength="1200"
+            lengthAdjust="spacingAndGlyphs"
+          >
             LAMAK BANA
           </text>
         </svg>
